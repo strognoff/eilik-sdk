@@ -113,11 +113,12 @@ def display_raw(payload: dict) -> dict[str, str]:
 def display_text(payload: dict) -> dict[str, str]:
     """Render text to a 128x64 framebuffer and push it. Uses PIL.
 
-    Body: {"text": "Hello", "font_size": 16}
+    Body: {"text": "Hello", "font_size": 16, "auto_reset": true}
     """
     text = payload.get("text", "")
     font_size = int(payload.get("font_size", 16))
     invert = bool(payload.get("invert", True))
+    auto_reset = bool(payload.get("auto_reset", True))
     try:
         from PIL import Image, ImageDraw, ImageFont
     except ImportError:
@@ -137,7 +138,7 @@ def display_text(payload: dict) -> dict[str, str]:
         f.write(buf.getvalue())
         tmp = Path(f.name)
     try:
-        ok = controller.display_image(tmp, invert=False)
+        ok = controller.display_image(tmp, invert=False, auto_reset=auto_reset)
     finally:
         tmp.unlink(missing_ok=True)
     return {"status": "ok" if ok else "error", "acked": "true" if ok else "false", "text": text}

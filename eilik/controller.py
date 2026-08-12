@@ -265,13 +265,28 @@ class EilikController:
         return status == 0x01
 
     def display_image(self, png_path: str | Path, threshold: int = 128,
-                      invert: bool = False) -> bool:
+                      invert: bool = False, auto_reset: bool = True) -> bool:
         """Convert a PNG (any size; auto-resized to 128x64) to a 1024-byte
         framebuffer and push it via `cmd=0xA4`.
 
         Use `invert=True` if the source PNG is white-on-black (Eilik's OLED
         is black-on-white, so most PNGs need inversion).
+
+        With `auto_reset=True` (default), the display is cleared to a blank
+        framebuffer after a short hold so the robot doesn't get stuck showing
+        a stale face.
         """
+        ok = self._display_image_raw(png_path, threshold=threshold, invert=invert)
+        if auto_reset and ok:
+            try:
+                time.sleep(2.0)  # let the user see the face for ~2s
+                self.write_display(bytes(1024))  # clear to blank
+            except Exception:
+                pass
+        return ok
+
+    def _display_image_raw(self, png_path: str | Path, threshold: int = 128,
+                           invert: bool = False) -> bool:
         from pathlib import Path as _Path
         png_path = _Path(png_path)
         try:
@@ -279,7 +294,6 @@ class EilikController:
                 decode_png, to_grayscale, resize_nearest, to_framebuffer,
             )
         except ImportError:
-            # try one level up
             import sys as _sys, os as _os
             sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), ".."))
             from tools.png_to_framebuffer import (
@@ -303,35 +317,111 @@ class EilikController:
         fb = to_framebuffer(gray, threshold=threshold)
         return self.write_display(fb)
 
+    def _safe_auto_reset(self) -> None:
+        """Try to return the robot to rest pose without raising on failure."""
+        try:
+            self._run_motion("reset_pose")
+        except Exception as exc:
+            self.logger.warning("AUTO_RESET_FAILED %s", exc)
+
     def reset_pose(self) -> None:
         self._run_motion("reset_pose")
 
     def wave(self) -> None:
         self._run_motion("wave")
+        self._safe_auto_reset()
 
     def nod(self) -> None:
         self._run_motion("nod")
+        self._safe_auto_reset()
 
     def shake_head(self) -> None:
         self._run_motion("shake_head")
+        self._safe_auto_reset()
 
     def look_left(self) -> None:
         self._run_motion("look_left")
+        self._safe_auto_reset()
 
     def look_right(self) -> None:
         self._run_motion("look_right")
+        self._safe_auto_reset()
 
     def left_arm_up(self) -> None:
         self._run_motion("left_arm_up")
+        self._safe_auto_reset()
 
     def left_arm_down(self) -> None:
         self._run_motion("left_arm_down")
+        self._safe_auto_reset()
 
     def right_arm_up(self) -> None:
         self._run_motion("right_arm_up")
+        self._safe_auto_reset()
 
     def right_arm_down(self) -> None:
         self._run_motion("right_arm_down")
+        self._safe_auto_reset()
+
+    def display_image(self, png_path: str | Path, threshold: int = 128,
+                      invert: bool = False, auto_reset: bool = True) -> bool:
+        """Convert a PNG (any size; auto-resized to 128x64) to a 1024-byte
+        framebuffer and push it via `cmd=0xA4`.
+
+        Use `invert=True` if the source PNG is white-on-black (Eilik's OLED
+        is black-on-white, so most PNGs need inversion).
+
+        With `auto_reset=True` (default), the display is cleared to a blank
+        framebuffer after a short hold so the robot doesn't get stuck showing
+        a stale face.
+        """
+        ok = self._display_image_raw(png_path, threshold=threshold, invert=invert)
+        if auto_reset and ok:
+            try:
+                time.sleep(2.0)  # let the user see the face for ~2s
+                self.write_display(bytes(1024))  # clear to blank
+            except Exception:
+                pass
+        return ok
+
+    def _display_image_raw(self, png_path: str | Path, threshold: int = 128,
+                           invert: bool = False) -> bool:
+        from pathlib import Path as _Path
+        png_path = _Path(png_path)
+        try:
+            from tools.png_to_framebuffer import (
+                decode_png, to_grayscale, resize_nearest, to_framebuffer,
+            )
+        except ImportError:
+            import sys as _sys, os as _os
+            sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), ".."))
+            from tools.png_to_framebuffer import (
+                decode_png, to_grayscale, resize_nearest, to_framebuffer,
+            )
+        width, height, pixels = decode_png(png_path)
+        actual = len(pixels)
+        expected = width * height
+        if actual == expected:
+            chans = 1
+        elif actual == expected * 3:
+            chans = 3
+        elif actual == expected * 4:
+            chans = 4
+        else:
+            raise ValueError(f"unsupported PNG pixel layout: {actual} bytes for {width}x{height}")
+        gray = to_grayscale(pixels, width, height, chans)
+        if invert:
+            gray = [255 - g for g in gray]
+        gray = resize_nearest(gray, width, height, 128, 64)
+        fb = to_framebuffer(gray, threshold=threshold)
+        return self.write_display(fb)
+
+    def _safe_auto_reset(self) -> None:
+        """Try to return the robot to rest pose without raising on failure."""
+        try:
+            self._run_motion("reset_pose")
+        except Exception as exc:
+            self.logger.warning("AUTO_RESET_FAILED %s", exc)
 
     def monitor(self, output_path: str | Path = "logs/eilik-monitor.log") -> None:
         """Continuously print and save incoming serial chunks as hex frames."""
