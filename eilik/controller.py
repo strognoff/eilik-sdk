@@ -6,10 +6,18 @@ import glob
 import threading
 import time
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, List, Optional
 
 from .logger import DEFAULT_LOG_PATH, hex_bytes, setup_logger
 from .motions import MOTIONS
+from .pack import (
+    FrameBuffer as _FrameBuffer,
+    read_display as _read_display,
+    read_running_number as _read_running_number,
+    read_servo_angles as _read_servo_angles,
+    write_display as _write_display,
+    write_running_number as _write_running_number,
+)
 from .protocol import (
     BAUD_RATE,
     HB1,
@@ -155,6 +163,77 @@ class EilikController:
     def move_motor(self, motor_id: int, position: int) -> None:
         self._send_servo(motor_id, position)
 
+    def read_servo_angles(self) -> List[int]:
+        """Send `cmd=0xA1` and decode the 4 servo angles (positions 0..3000)."""
+        return self._send_cmd_and_parse(_read_servo_angles(), 0xA1, 4, "read_servo_angles")
+
+    def read_running_number(self) -> int:
+        """Send `cmd=0xA5` and decode the running animation index."""
+        raw = self._send_cmd_and_parse(_read_running_number(), 0xA5, 1, "read_running_number")
+        return raw[0] if raw else 0
+
+    def write_running_number(self, index: int) -> None:
+        """Send `cmd=0xA6` with a 1-byte animation index."""
+        self._send_simple(_write_running_number(index), f"TX_RUNNING idx={index}")
+
+    def read_display(self) -> Optional[bytes]:
+        """Send `cmd=0xA3` and return the 1024-byte framebuffer image.
+
+        Page-mode SSD1306-style: 128 columns × 64 rows = 1024 bytes.
+        Return None if the robot did not reply within ~1 second.
+        """
+        self._ensure_connected()
+        assert self._serial is not None
+        with self._lock:
+            self._serial.reset_input_buffer()
+            self._write_raw(_read_display(), "TX_READ_DISPLAY")
+            time.sleep(0.3)
+            buf = b""
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline:
+                n = self._serial.in_waiting
+                if n:
+                    buf += self._serial.read(n)
+                else:
+                    time.sleep(0.02)
+        self.logger.info("RX_READ_DISPLAY %d bytes", len(buf))
+        frames = _FrameBuffer().feed(buf)
+        if not frames:
+            return None
+        f = frames[0]
+        body = f[5:-1]  # strip magic+length and checksum
+        # body[0] = status byte, body[1:1025] = 1024-byte image
+        return bytes(body[1:1025])
+
+    def write_display(self, image_1024b: bytes) -> bool:
+        """Send `cmd=0xA4` with a 1024-byte framebuffer.
+
+        Returns True if the firmware ACKed (status byte 0x01).
+        """
+        if len(image_1024b) != 1024:
+            raise ValueError(f"display payload must be 1024 bytes (got {len(image_1024b)})")
+        self._ensure_connected()
+        assert self._serial is not None
+        with self._lock:
+            self._serial.reset_input_buffer()
+            self._write_raw(_write_display(image_1024b), "TX_WRITE_DISPLAY 1024B")
+            time.sleep(0.3)
+            buf = b""
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                n = self._serial.in_waiting
+                if n:
+                    buf += self._serial.read(n)
+                else:
+                    time.sleep(0.02)
+        self.logger.info("RX_WRITE_DISPLAY %s", hex_bytes(buf))
+        frames = _FrameBuffer().feed(buf)
+        if not frames:
+            return False
+        body = frames[0][5:-1]
+        # body[0] = status byte; status=0x01 = success
+        return bool(body) and body[0] == 0x01
+
     def reset_pose(self) -> None:
         self._run_motion("reset_pose")
 
@@ -276,6 +355,63 @@ class EilikController:
         if data:
             self.logger.info("RX %s", hex_bytes(data))
         return data
+
+    def _send_simple(self, frame: bytes, label: str) -> None:
+        """Send a packet and wait briefly for an ACK. No parsing."""
+        self._ensure_connected()
+        with self._lock:
+            self._serial.reset_input_buffer() if self._serial else None
+            self._write_raw(frame, label)
+            time.sleep(0.3)
+            buf = b""
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                n = self._serial.in_waiting if self._serial else 0
+                if n:
+                    buf += self._serial.read(n)
+                else:
+                    time.sleep(0.02)
+        self.logger.info("RX_%s %s", label, hex_bytes(buf))
+
+    def _send_cmd_and_parse(self, frame: bytes, expected_cmd: int,
+                            payload_words: int, label: str) -> List[int]:
+        """Send a read packet, parse the response, return payload words as ints.
+
+        `payload_words` controls how many 16-bit little-endian values to extract
+        AFTER the status byte (which is always body[0]).
+        """
+        self._ensure_connected()
+        assert self._serial is not None
+        with self._lock:
+            self._serial.reset_input_buffer()
+            self._write_raw(frame, f"TX_{label}")
+            time.sleep(0.3)
+            buf = b""
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline:
+                n = self._serial.in_waiting
+                if n:
+                    buf += self._serial.read(n)
+                else:
+                    time.sleep(0.02)
+        self.logger.info("RX_%s %d bytes", label, len(buf))
+        frames = _FrameBuffer().feed(buf)
+        if not frames:
+            return []
+        body = frames[0][5:-1]  # skip magic+length and checksum
+        # body[0] = status byte; body[1:] = payload
+        payload = body[1:]
+        if payload_words == 1:
+            return [payload[0]] if payload else []
+        # decode `payload_words` u16 little-endian
+        import struct as _struct
+        out = []
+        for i in range(payload_words):
+            off = i * 2
+            if off + 2 > len(payload):
+                break
+            out.append(_struct.unpack_from('<H', payload, off)[0])
+        return out
 
     def _ensure_connected(self) -> None:
         if not self.connected:
