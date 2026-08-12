@@ -201,9 +201,12 @@ class EilikController:
         if not frames:
             return None
         f = frames[0]
-        body = f[5:-1]  # strip magic+length and checksum
-        # body[0] = status byte, body[1:1025] = 1024-byte image
-        return bytes(body[1:1025])
+        # frame layout: magic(3) | length u16 LE(2) | cmd echo(1) | status(1) |
+        #               1024 image bytes | checksum(1)
+        if len(f) < 1032:
+            self.logger.warning("RX_READ_DISPLAY short frame (%d bytes)", len(f))
+            return None
+        return bytes(f[7:1031])
 
     def write_display(self, image_1024b: bytes) -> bool:
         """Send `cmd=0xA4` with a 1024-byte framebuffer.
@@ -230,9 +233,13 @@ class EilikController:
         frames = _FrameBuffer().feed(buf)
         if not frames:
             return False
-        body = frames[0][5:-1]
-        # body[0] = status byte; status=0x01 = success
-        return bool(body) and body[0] == 0x01
+        # frame layout: magic(3) | length u16 LE(2) | cmd echo(1) | status(1) | checksum(1)
+        f = frames[0]
+        if len(f) < 7:
+            return False
+        status = f[6]
+        self.logger.info("WRITE_DISPLAY status=0x%02x", status)
+        return status == 0x01
 
     def reset_pose(self) -> None:
         self._run_motion("reset_pose")
@@ -398,9 +405,11 @@ class EilikController:
         frames = _FrameBuffer().feed(buf)
         if not frames:
             return []
-        body = frames[0][5:-1]  # skip magic+length and checksum
-        # body[0] = status byte; body[1:] = payload
-        payload = body[1:]
+        f = frames[0]
+        # frame layout: magic(3) | length u16 LE(2) | cmd echo(1) | status(1) | payload | checksum(1)
+        if len(f) < 7:
+            return []
+        payload = f[7:-1]
         if payload_words == 1:
             return [payload[0]] if payload else []
         # decode `payload_words` u16 little-endian
