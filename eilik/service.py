@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 
 from fastapi import FastAPI
 
@@ -78,7 +79,6 @@ def display_image(payload: dict) -> dict[str, str]:
     """
     import base64
     from pathlib import Path
-    import tempfile
     png_b64 = payload.get("png_b64")
     if not png_b64:
         return {"status": "error", "message": "png_b64 required"}
@@ -92,7 +92,7 @@ def display_image(payload: dict) -> dict[str, str]:
         ok = controller.display_image(tmp, invert=invert, threshold=threshold)
     finally:
         tmp.unlink(missing_ok=True)
-    return {"status": "ok" if ok else "error", "acked": ok}
+    return {"status": "ok" if ok else "error", "acked": "true" if ok else "false"}
 
 
 @app.post("/display/raw")
@@ -106,7 +106,7 @@ def display_raw(payload: dict) -> dict[str, str]:
         return {"status": "error", "message": "framebuffer_hex must be 2048 hex chars"}
     data = bytes.fromhex(hex_str)
     ok = controller.write_display(data)
-    return {"status": "ok" if ok else "error", "acked": ok}
+    return {"status": "ok" if ok else "error", "acked": "true" if ok else "false"}
 
 
 @app.post("/display/text")
@@ -140,7 +140,7 @@ def display_text(payload: dict) -> dict[str, str]:
         ok = controller.display_image(tmp, invert=False)
     finally:
         tmp.unlink(missing_ok=True)
-    return {"status": "ok" if ok else "error", "acked": ok, "text": text}
+    return {"status": "ok" if ok else "error", "acked": "true" if ok else "false", "text": text}
 
 
 @app.get("/servo/angles")
