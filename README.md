@@ -29,6 +29,19 @@ pip install -e ".[dev]"
 
 If WSL USB passthrough is already active, the robot should appear as `/dev/ttyACM0` or as a USB CDC ACM serial device with VID:PID `28e9:018a`.
 
+After `wsl --shutdown`, USB passthrough is dropped. From Windows PowerShell, reattach Eilik before running the SDK:
+
+```powershell
+usbipd list
+usbipd attach --wsl --busid <BUSID>
+```
+
+For example, if `usbipd list` shows Eilik as bus `2-2`:
+
+```powershell
+usbipd attach --wsl --busid 2-2
+```
+
 If the device exists but is not readable/writable, add the WSL user to `dialout` or adjust a local udev rule:
 
 ```bash
