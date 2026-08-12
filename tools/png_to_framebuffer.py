@@ -125,6 +125,32 @@ def to_framebuffer(gray: list[int], width: int = 128, height: int = 64, threshol
     return bytes(fb)
 
 
+# Bit-reverse table for 8-bit values (used by rotate_180 below).
+_BIT_REVERSE_TABLE = bytes(int(f"{b:08b}"[::-1], 2) for b in range(256))
+
+
+def rotate_180(buf: bytes | bytearray) -> bytes:
+    """Rotate a 1024-byte SSD1306 framebuffer by 180°.
+
+    Eilik's OLED panel (or firmware) renders the framebuffer rotated 180° from
+    what the SDK reads back. So when you build a framebuffer from a PNG and
+    send it, the user's image appears upside-down on the physical display.
+
+    To get the image to appear right-side-up, rotate the framebuffer by 180°
+    BEFORE sending.
+
+    Rotation: page[p] ↔ page[7-p] AND column[c] ↔ column[127-c] AND bit[b] ↔ bit[7-b].
+    """
+    assert len(buf) == 1024, f"framebuffer must be 1024 bytes (got {len(buf)})"
+    out = bytearray(1024)
+    for p in range(8):
+        src_page = 7 - p
+        for c in range(128):
+            src_col = 127 - c
+            out[p * 128 + c] = _BIT_REVERSE_TABLE[buf[src_page * 128 + src_col]]
+    return bytes(out)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Convert PNG to Eilik 1024-byte framebuffer.")
     parser.add_argument("input", type=Path, help="Input PNG (any size; auto-resized to 128x64).")

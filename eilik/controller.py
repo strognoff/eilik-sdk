@@ -294,59 +294,6 @@ class EilikController:
         self.logger.info("WRITE_DISPLAY status=0x%02x", status)
         return status == 0x01
 
-    def display_image(self, png_path: str | Path, threshold: int = 128,
-                      invert: bool = False, auto_reset: bool = True) -> bool:
-        """Convert a PNG (any size; auto-resized to 128x64) to a 1024-byte
-        framebuffer and push it via `cmd=0xA4`.
-
-        Use `invert=True` if the source PNG is white-on-black (Eilik's OLED
-        is black-on-white, so most PNGs need inversion).
-
-        With `auto_reset=True` (default), the display is cleared to a blank
-        framebuffer after a short hold so the robot doesn't get stuck showing
-        a stale face.
-        """
-        ok = self._display_image_raw(png_path, threshold=threshold, invert=invert)
-        if auto_reset and ok:
-            try:
-                time.sleep(2.0)  # let the user see the face for ~2s
-                self.write_display(bytes(1024))  # clear to blank
-            except Exception:
-                pass
-        return ok
-
-    def _display_image_raw(self, png_path: str | Path, threshold: int = 128,
-                           invert: bool = False) -> bool:
-        from pathlib import Path as _Path
-        png_path = _Path(png_path)
-        try:
-            from tools.png_to_framebuffer import (
-                decode_png, to_grayscale, resize_nearest, to_framebuffer,
-            )
-        except ImportError:
-            import sys as _sys, os as _os
-            sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), ".."))
-            from tools.png_to_framebuffer import (
-                decode_png, to_grayscale, resize_nearest, to_framebuffer,
-            )
-        width, height, pixels = decode_png(png_path)
-        actual = len(pixels)
-        expected = width * height
-        if actual == expected:
-            chans = 1
-        elif actual == expected * 3:
-            chans = 3
-        elif actual == expected * 4:
-            chans = 4
-        else:
-            raise ValueError(f"unsupported PNG pixel layout: {actual} bytes for {width}x{height}")
-        gray = to_grayscale(pixels, width, height, chans)
-        if invert:
-            gray = [255 - g for g in gray]
-        gray = resize_nearest(gray, width, height, 128, 64)
-        fb = to_framebuffer(gray, threshold=threshold)
-        return self.write_display(fb)
-
     def reset_pose(self) -> None:
         self._run_motion("reset_pose")
 
@@ -379,7 +326,7 @@ class EilikController:
 
     def display_image(self, png_path: str | Path, threshold: int = 128,
                       invert: bool = False, hold_seconds: float = 0.0,
-                      auto_idle: bool = True) -> bool:
+                      auto_idle: bool = True, auto_rotate: bool = True) -> bool:
         """Convert a PNG (any size; auto-resized to 128x64) to a 1024-byte
         framebuffer and push it via `cmd=0xA4`.
 
@@ -392,11 +339,18 @@ class EilikController:
         state instead of a blank/cleared screen, so the firmware's idle
         animation loop resumes naturally.
 
+        With `auto_rotate=True` (default), the framebuffer is rotated 180°
+        before sending because Eilik's OLED panel (or firmware) renders
+        framebuffers rotated 180° from what the SDK reads back. If you set
+        this False, the image will appear upside-down on the physical screen
+        (or right-side-up if you pre-rotated it yourself).
+
         Both the user face and the idle-face push use `cmd=0xA6` running_number
         first to lock the firmware in user-display mode (otherwise the idle
         animation overwrites the framebuffer within ~50ms).
         """
-        ok = self._display_image_raw(png_path, threshold=threshold, invert=invert)
+        ok = self._display_image_raw(png_path, threshold=threshold, invert=invert,
+                                     auto_rotate=auto_rotate)
         if ok and (hold_seconds > 0 or auto_idle):
             try:
                 if hold_seconds > 0:
@@ -404,7 +358,8 @@ class EilikController:
                 if auto_idle:
                     idle_path = Path(__file__).resolve().parent.parent / "captures" / "eilik-display-cmd-A3.png"
                     if idle_path.exists():
-                        self._display_image_raw(idle_path, threshold=128, invert=False)
+                        self._display_image_raw(idle_path, threshold=128, invert=False,
+                                                auto_rotate=auto_rotate)
                     # After restoring the firmware idle framebuffer, release
                     # the user-display lock so the firmware's idle animation
                     # can resume (otherwise it stays stuck on the captured frame).
@@ -419,18 +374,20 @@ class EilikController:
         return ok
 
     def _display_image_raw(self, png_path: str | Path, threshold: int = 128,
-                           invert: bool = False) -> bool:
+                           invert: bool = False, auto_rotate: bool = True) -> bool:
         from pathlib import Path as _Path
         png_path = _Path(png_path)
         try:
             from tools.png_to_framebuffer import (
                 decode_png, to_grayscale, resize_nearest, to_framebuffer,
+                rotate_180,
             )
         except ImportError:
             import sys as _sys, os as _os
             sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), ".."))
             from tools.png_to_framebuffer import (
                 decode_png, to_grayscale, resize_nearest, to_framebuffer,
+                rotate_180,
             )
         width, height, pixels = decode_png(png_path)
         actual = len(pixels)
@@ -448,6 +405,11 @@ class EilikController:
             gray = [255 - g for g in gray]
         gray = resize_nearest(gray, width, height, 128, 64)
         fb = to_framebuffer(gray, threshold=threshold)
+        # Eilik's OLED panel (or firmware) renders the framebuffer rotated 180°
+        # from what the SDK reads back. Rotate before sending so the user's
+        # image appears right-side-up on the physical display.
+        if auto_rotate:
+            fb = rotate_180(fb)
         return self.write_display(fb)
 
     def _safe_auto_reset(self) -> None:
