@@ -7,3 +7,16 @@ captures/
 logs/*.log
 logs/*.txt
 !logs/.gitkeep
+# reversing: keep our RE reports, ignore raw binaries
+reversing/.venv/
+reversing/EnergizeApp/
+reversing/_apk_extract/
+reversing/_reports/hermes.decompiled.js
+reversing/_reports/hermes.disasm.txt
+reversing/_reports/hermes.focused_context.txt
+reversing/_reports/dex.strings.txt
+reversing/_reports/arm64.strings.txt
+reversing/_reports/hermes.strings.txt
+reversing/*.apk
+reversing/*.apk:Zone.Identifier
+
