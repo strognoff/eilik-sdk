@@ -35,6 +35,16 @@ from .protocol import (
 EILIK_USB_VID = 0x28E9
 EILIK_USB_PID = 0x018A
 
+# Running number that puts the firmware in "user-display mode" — must be set
+# before every cmd=0xA4 write or the firmware's idle animation will overwrite
+# the user's framebuffer within ~50ms. Empirically determined: index 100.
+USER_DISPLAY_RUNNING_NUMBER = 100
+
+# Running number that RELEASES the firmware's user-display lock, allowing the
+# firmware's idle animation loop to take over. Set after auto_idle pushes the
+# firmware idle face. Empirically: index 0.
+RELEASE_DISPLAY_RUNNING_NUMBER = 0
+
 
 class EilikConnectionError(RuntimeError):
     """Raised when the Eilik serial connection cannot be established."""
@@ -245,6 +255,12 @@ class EilikController:
         """Send `cmd=0xA4` with a 1024-byte framebuffer.
 
         Returns True if the firmware ACKed (status byte 0x01).
+
+        **Important**: before every display write, this method also sends
+        `cmd=0xA6` with `running_number=USER_DISPLAY_RUNNING_NUMBER` to put the
+        firmware in "user-display mode". Without this, the firmware's idle
+        animation overwrites the custom framebuffer within ~50ms and the
+        user's display content is lost.
         """
         if len(image_1024b) != 1024:
             raise ValueError(f"display payload must be 1024 bytes (got {len(image_1024b)})")
@@ -252,6 +268,10 @@ class EilikController:
         assert self._serial is not None
         with self._lock:
             self._serial.reset_input_buffer()
+            # Lock the firmware into user-display mode so it doesn't override us
+            self._write_raw(_write_running_number(USER_DISPLAY_RUNNING_NUMBER),
+                            f"TX_WRITE_RUNNING idx={USER_DISPLAY_RUNNING_NUMBER}")
+            time.sleep(0.05)
             self._write_raw(_write_display(image_1024b), "TX_WRITE_DISPLAY 1024B")
             time.sleep(0.3)
             buf = b""
@@ -371,6 +391,10 @@ class EilikController:
         restored after the hold. This puts the robot back to its true idle
         state instead of a blank/cleared screen, so the firmware's idle
         animation loop resumes naturally.
+
+        Both the user face and the idle-face push use `cmd=0xA6` running_number
+        first to lock the firmware in user-display mode (otherwise the idle
+        animation overwrites the framebuffer within ~50ms).
         """
         ok = self._display_image_raw(png_path, threshold=threshold, invert=invert)
         if ok and (hold_seconds > 0 or auto_idle):
@@ -381,6 +405,15 @@ class EilikController:
                     idle_path = Path(__file__).resolve().parent.parent / "captures" / "eilik-display-cmd-A3.png"
                     if idle_path.exists():
                         self._display_image_raw(idle_path, threshold=128, invert=False)
+                    # After restoring the firmware idle framebuffer, release
+                    # the user-display lock so the firmware's idle animation
+                    # can resume (otherwise it stays stuck on the captured frame).
+                    with self._lock:
+                        if self._serial is not None:
+                            self._write_raw(
+                                _write_running_number(RELEASE_DISPLAY_RUNNING_NUMBER),
+                                f"TX_WRITE_RUNNING idx={RELEASE_DISPLAY_RUNNING_NUMBER} (release)"
+                            )
             except Exception as exc:
                 self.logger.warning("AUTO_IDLE_FAILED %s", exc)
         return ok
