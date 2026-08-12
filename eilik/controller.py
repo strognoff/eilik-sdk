@@ -690,7 +690,7 @@ class EilikController:
         self.choreography([
             {"action": "welcome_back"},
             {"wait": 0.5},
-            {"action": "wave"},
+            {"motion": "wave"},
         ], inter_step_delay=0.4)
 
     def monitor(self, output_path: str | Path = "logs/eilik-monitor.log") -> None:
