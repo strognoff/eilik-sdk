@@ -72,5 +72,23 @@ class TestLiveDisplay(unittest.TestCase):
         self.assertGreaterEqual(len(angles), 4)
 
 
+class TestDetectPort(unittest.TestCase):
+    """Static-method unit tests for the port detection logic.
+
+    These run without any hardware — they just verify that `detect_port`
+    returns a `/dev/ttyACM*` path on this host when one exists.
+    """
+
+    def test_detect_returns_acm_path(self) -> None:
+        import glob as _glob
+        from eilik.controller import EilikController
+
+        acm_paths = sorted(_glob.glob("/dev/ttyACM*"))
+        if not acm_paths:
+            self.skipTest("no /dev/ttyACM* on this host")
+        result = EilikController.detect_port()
+        self.assertTrue(result.startswith("/dev/ttyACM"))
+
+
 if __name__ == "__main__":
     unittest.main()

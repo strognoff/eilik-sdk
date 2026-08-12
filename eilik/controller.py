@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import glob
+import os
 import threading
 import time
 from pathlib import Path
@@ -79,35 +80,44 @@ class EilikController:
 
     @staticmethod
     def detect_port(preferred: str = "/dev/ttyACM0") -> str:
-        """Detect Eilik's Linux serial device, preferring /dev/ttyACM0."""
+        """Detect Eilik's Linux serial device.
+
+        Order of preference:
+        1. `preferred` if it exists (default `/dev/ttyACM0`)
+        2. any `/dev/ttyACM*` whose underlying USB device matches VID:PID `28e9:018a`
+        3. any `/dev/ttyACM*` (sorted, since ACM0 may be busy with another device)
+        """
 
         if Path(preferred).exists():
             return preferred
 
-        try:
-            from serial.tools import list_ports
-        except ImportError as exc:
-            raise EilikConnectionError("pyserial is required for serial port discovery") from exc
-
-        ports = list(list_ports.comports())
-        for port in ports:
-            if port.vid == EILIK_USB_VID and port.pid == EILIK_USB_PID:
-                return port.device
-
-        description_markers = ("gd32", "gdmicroelectronics", "eilik", "cdc acm")
-        for port in ports:
-            haystack = " ".join(
-                str(value or "").lower()
-                for value in (port.description, port.manufacturer, port.product, port.hwid)
-            )
-            if any(marker in haystack for marker in description_markers):
-                return port.device
-
+        # Prefer VID:PID match across all /dev/ttyACM* nodes
         acm_ports = sorted(glob.glob("/dev/ttyACM*"))
+        for port in acm_ports:
+            try:
+                # Walk /sys/class/tty/<name>/device to find the USB idVendor
+                sys_path = Path("/sys/class/tty") / Path(port).name / "device"
+                # resolve symlinks
+                while sys_path.is_symlink():
+                    sys_path = Path(os.readlink(sys_path))
+                    if not sys_path.is_absolute():
+                        sys_path = sys_path.resolve()
+                id_vendor = (sys_path / "idVendor").read_text().strip()
+                id_product = (sys_path / "idProduct").read_text().strip()
+                if (
+                    int(id_vendor, 16) == EILIK_USB_VID
+                    and int(id_product, 16) == EILIK_USB_PID
+                ):
+                    return port
+            except (OSError, ValueError):
+                continue
+
         if acm_ports:
             return acm_ports[0]
 
-        raise EilikConnectionError("Could not find Eilik serial device; expected /dev/ttyACM0 or VID:PID 28e9:018a")
+        raise EilikConnectionError(
+            "Could not find Eilik serial device; expected /dev/ttyACM0 or VID:PID 28e9:018a"
+        )
 
     def connect(self) -> None:
         """Open the serial device, perform handshake, and start keep-alive."""
