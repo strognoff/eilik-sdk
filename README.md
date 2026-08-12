@@ -294,6 +294,46 @@ robot.wave()
 robot.disconnect()
 ```
 
+## Wiring Crons to Eilik
+
+Two scripts make cron → Eilik integration trivial:
+
+### `scripts/ensure_eilik_service.sh` — keep the service alive
+
+Pings `/health`. If unreachable, kills the leftover uvicorn process,
+auto-detects the Eilik USB port (`/dev/ttyACM1` or wherever `28e9:018a`
+shows up), and restarts the FastAPI service. Silent when healthy, logs
+to `/tmp/eilik-service.watchdog.log` on restart attempts.
+
+Suggested cron: every 5 minutes (`*/5 * * * *`).
+
+### `scripts/run_with_eilik.sh` — generic wrapper (in `openclaw-automation-scripts`)
+
+```bash
+# Usage: run_with_eilik.sh <cron-name> <command...>
+run_with_eilik.sh morning-brief python3 scripts/morning_briefing.py
+run_with_eilik.sh garmin-sync .venv/bin/python scripts/garmin_sync.py --latest
+```
+
+Wraps any command. On exit code:
+
+- `rc == 0` → `POST /event/cron_done` with `{"name": "<cron-name>"}`
+- `rc != 0` → `POST /event/error` with `{"message": "<cron-name> failed (rc=N)"}`
+
+The curl is best-effort (`--max-time 30`, never blocks the script). The
+wrapper always exits with the wrapped command's exit code so the cron
+scheduler still reports success/failure correctly. Override the target
+with `EILIK_URL=http://127.0.0.1:8765`.
+
+### Wired crons
+
+- Calendar calcurse sync — `cron_done("calcurse-sync")`
+- Garmin daily sync — `cron_done("garmin-sync")`
+- Morning news brief — `cron_done("morning-brief")`
+- Nova Medium→LinkedIn — `cron_done("medium-linkedin")`
+- Nova system healthcheck — `cron_done("nova-healthcheck")`
+- Nova daily day summary (multi-step) — `cron_done("day-summary")` via prompt-side curl
+
 ## Protocol Notes
 
 The SDK uses the canonical `format_data()` packet format from
