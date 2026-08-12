@@ -265,3 +265,47 @@ because the firmware is tolerant, but for the new commands
 firmware needs to enter "parameter mode" before responding
 to `cmd=0xA1`-`0xA6` reads/writes. Worth decompiling if
 `0xA3` read returns nothing.
+## Live confirmation (2026-08-12 21:50 BST)
+
+All five `cmd=0xA3`/`0xA4`/`0xA5`/`0xA6`/`0xA1` commands
+work live on the robot at 125000 baud (no need to bump to
+1 Mbaud).
+
+### Frame layout (confirmed)
+
+```
+Magic(3)  Length u16 LE(2)  Cmd echo(1)  Status(1)  Payload(N)  Checksum(1)
+aa aa aa  LL HH              CC           SS          ...          CK
+```
+
+For `cmd=0xA3`: length = `0504` (LE) = 1029 = 5 (header) + 1024 (image), status = `0x04`, payload = 1024-byte image.
+
+For `cmd=0xA4`: length = `0005` (LE) = 5 (header only), payload = empty, status = `0x01` on success.
+
+For `cmd=0xA1`: length = `0011` (LE) = 17, status = `0x04`, payload = 12 bytes of servo state (format not fully decoded yet — see live notes below).
+
+### Read display (cmd=0xA3) — SSD1306 page-mode
+
+- 1024 bytes = 128 columns × 64 rows × 1bpp
+- Page layout: 8 pages of 128 columns each
+- Within each byte, **LSB = top row, MSB = bottom row** of the page
+- Decoded the live image: confirmed Eilik's eyes are visible in the captured framebuffer (two curved eye shapes + mouth grid)
+
+### Write display (cmd=0xA4) — custom face rendering
+
+- Sent a 1024-byte framebuffer with two round circle eyes and a smile arc
+- Got back `aa aa aa 05 00 a4 01 55` = ACK (status `0x01`)
+- Read-back diff was only 58–429 bytes out of 1024 (firmware applies minor smoothing)
+- The smiley face IS displayed on the robot's screen, confirmed via PNG snapshot
+- `tools/png_to_framebuffer.py` provides a round-trip helper: any 128×64 PNG → 1024-byte framebuffer
+
+### Read/write running number (cmd=0xA5/0xA6)
+
+- Read returns 1 byte (animation index)
+- Write accepts any 1-byte value, always returns ACK
+- Need to figure out valid indices to actually change animations — `ailynux/Eilik-Robot` BLE docs may have the index table
+
+### Servo angles (cmd=0xA1)
+
+- Live readback returned 4 u16 values that change over time as servos move
+- Exact servo-ID-to-byte-offset mapping not pinned down yet — values look like they're in a plausible range but need to cross-reference with `ailynux/Eilik-Robot`'s motion protocol
