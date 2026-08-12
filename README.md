@@ -140,6 +140,8 @@ Available high-level methods:
 
 The SDK preserves the packet format from `uDamocles/EilikSerialController`.
 
+If the robot opens over `/dev/ttyACM0` but does not reply to the public `HB1` handshake, capture the official app traffic and extract the real init flow. See [docs/CAPTURE_HANDSHAKE.md](docs/CAPTURE_HANDSHAKE.md).
+
 Handshake:
 
 1. Send `HB1`: `aa aa aa 0a 00 61 e4 c6 f1 ca 83 ff ad`

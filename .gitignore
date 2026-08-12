@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 *.egg-info/
+captures/
 logs/*.log
 logs/*.txt
 !logs/.gitkeep
