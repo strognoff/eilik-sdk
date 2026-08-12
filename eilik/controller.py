@@ -17,6 +17,7 @@ from .pack import (
     read_servo_angles as _read_servo_angles,
     write_display as _write_display,
     write_running_number as _write_running_number,
+    write_servo as _write_servo_packet,
 )
 from .protocol import (
     BAUD_RATE,
@@ -161,7 +162,29 @@ class EilikController:
             self._protocol_variant = None
 
     def move_motor(self, motor_id: int, position: int) -> None:
-        self._send_servo(motor_id, position)
+        """Move a single servo using the canonical pack-format `cmd=0xA2`.
+
+        Works without a session token because it uses `format_data()` from
+        the official `PackAnalyData` wrapper (decoded from EnergizeLab.exe).
+        `position` is a 16-bit value (typical range 0..3000).
+        """
+        self._ensure_connected()
+        assert self._serial is not None
+        frame = _write_servo_packet([(motor_id, position)])
+        with self._lock:
+            self._write_raw(frame, f"TX_SERVO_DIRECT motor={motor_id} pos={position}")
+            time.sleep(0.1)
+            # drain any ACK
+            buf = b''
+            deadline = time.monotonic() + 0.5
+            while time.monotonic() < deadline:
+                n = self._serial.in_waiting
+                if n:
+                    buf += self._serial.read(n)
+                else:
+                    time.sleep(0.02)
+        if buf:
+            self.logger.info("RX_SERVO_DIRECT %s", hex_bytes(buf))
 
     def read_servo_angles(self) -> List[int]:
         """Send `cmd=0xA1` and decode the 4 servo angles (positions 0..3000)."""
@@ -240,6 +263,45 @@ class EilikController:
         status = f[6]
         self.logger.info("WRITE_DISPLAY status=0x%02x", status)
         return status == 0x01
+
+    def display_image(self, png_path: str | Path, threshold: int = 128,
+                      invert: bool = False) -> bool:
+        """Convert a PNG (any size; auto-resized to 128x64) to a 1024-byte
+        framebuffer and push it via `cmd=0xA4`.
+
+        Use `invert=True` if the source PNG is white-on-black (Eilik's OLED
+        is black-on-white, so most PNGs need inversion).
+        """
+        from pathlib import Path as _Path
+        png_path = _Path(png_path)
+        try:
+            from tools.png_to_framebuffer import (
+                decode_png, to_grayscale, resize_nearest, to_framebuffer,
+            )
+        except ImportError:
+            # try one level up
+            import sys as _sys, os as _os
+            sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), ".."))
+            from tools.png_to_framebuffer import (
+                decode_png, to_grayscale, resize_nearest, to_framebuffer,
+            )
+        width, height, pixels = decode_png(png_path)
+        actual = len(pixels)
+        expected = width * height
+        if actual == expected:
+            chans = 1
+        elif actual == expected * 3:
+            chans = 3
+        elif actual == expected * 4:
+            chans = 4
+        else:
+            raise ValueError(f"unsupported PNG pixel layout: {actual} bytes for {width}x{height}")
+        gray = to_grayscale(pixels, width, height, chans)
+        if invert:
+            gray = [255 - g for g in gray]
+        gray = resize_nearest(gray, width, height, 128, 64)
+        fb = to_framebuffer(gray, threshold=threshold)
+        return self.write_display(fb)
 
     def reset_pose(self) -> None:
         self._run_motion("reset_pose")
