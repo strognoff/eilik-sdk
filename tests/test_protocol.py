@@ -1,9 +1,15 @@
 from eilik.protocol import (
     HB1,
+    OFFICIAL_SESSION_ACK,
+    OFFICIAL_SESSION_START,
+    OFFICIAL_STATUS_REQUEST,
+    build_command_frame,
     build_servo_frame,
     build_servo_payload,
     calculate_checksum,
     extract_session_token,
+    has_command_reply,
+    iter_frames,
 )
 
 
@@ -38,3 +44,22 @@ def test_session_token_parsing_tolerates_leading_noise():
 
 def test_hb1_is_reference_heartbeat():
     assert HB1.hex(" ") == "aa aa aa 0a 00 61 e4 c6 f1 ca 83 ff ad"
+
+
+def test_captured_official_status_frame_matches_capture():
+    assert build_command_frame(0x01) == OFFICIAL_STATUS_REQUEST
+    assert OFFICIAL_STATUS_REQUEST.hex(" ") == "aa aa aa 04 00 01 fa"
+
+
+def test_captured_official_session_start_matches_capture():
+    assert build_command_frame(0x02, bytes.fromhex("00 09 00 00 00")) == OFFICIAL_SESSION_START
+    assert build_command_frame(0x02) == OFFICIAL_SESSION_ACK
+
+
+def test_iter_frames_finds_checked_frames_with_noise():
+    buffer = b"\x00\xff" + OFFICIAL_STATUS_REQUEST + b"junk" + OFFICIAL_SESSION_ACK
+
+    assert iter_frames(buffer) == [OFFICIAL_STATUS_REQUEST, OFFICIAL_SESSION_ACK]
+    assert has_command_reply(buffer, 0x01)
+    assert has_command_reply(buffer, 0x02)
+    assert not has_command_reply(buffer, 0x03)

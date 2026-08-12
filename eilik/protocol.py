@@ -10,6 +10,10 @@ SERIAL_TIMEOUT_SECONDS = 1.0
 HEADER = bytes.fromhex("aa aa aa")
 HANDSHAKE_SIGNATURE = bytes.fromhex("aa aa aa 0a 00 61")
 HB1 = bytes.fromhex("aa aa aa 0a 00 61 e4 c6 f1 ca 83 ff ad")
+OFFICIAL_STATUS_REQUEST = bytes.fromhex("aa aa aa 04 00 01 fa")
+OFFICIAL_MODE_REQUEST = bytes.fromhex("aa aa aa 04 00 20 db")
+OFFICIAL_SESSION_START = bytes.fromhex("aa aa aa 09 00 02 00 09 00 00 00 eb")
+OFFICIAL_SESSION_ACK = bytes.fromhex("aa aa aa 04 00 02 f9")
 
 SESSION_TOKEN_LENGTH = 5
 
@@ -36,6 +40,52 @@ def calculate_checksum(payload: bytes) -> int:
     """Return the one-byte checksum used by the original implementation."""
 
     return 255 - (sum(payload) % 256)
+
+
+def build_command_frame(command_id: int, data: bytes = b"") -> bytes:
+    """Build a captured official-app command frame.
+
+    The two-byte length is the number of bytes after the three-byte header:
+    length + command + data + checksum.
+    """
+
+    if not 0 <= command_id <= 0xFF:
+        raise ValueError("Eilik command id must fit in one byte")
+    length = len(data) + 4
+    payload = length.to_bytes(2, byteorder="little") + bytes([command_id]) + data
+    return HEADER + payload + bytes([calculate_checksum(payload)])
+
+
+def command_id(frame: bytes) -> int:
+    if len(frame) < len(HEADER) + 4 or not frame.startswith(HEADER):
+        raise ValueError("Frame is too short or missing Eilik header")
+    return frame[5]
+
+
+def iter_frames(buffer: bytes) -> list[bytes]:
+    """Return complete Eilik frames found in a raw byte buffer."""
+
+    frames: list[bytes] = []
+    start = 0
+    while True:
+        idx = buffer.find(HEADER, start)
+        if idx == -1 or idx + 6 > len(buffer):
+            break
+        length = int.from_bytes(buffer[idx + 3 : idx + 5], byteorder="little")
+        end = idx + len(HEADER) + length
+        if length < 4 or end > len(buffer):
+            start = idx + 1
+            continue
+        frame = buffer[idx:end]
+        payload = frame[len(HEADER) : -1]
+        if frame[-1] == calculate_checksum(payload):
+            frames.append(frame)
+        start = idx + 1
+    return frames
+
+
+def has_command_reply(buffer: bytes, expected_command_id: int) -> bool:
+    return any(command_id(frame) == expected_command_id for frame in iter_frames(buffer))
 
 
 def clamp_position(position: int) -> int:

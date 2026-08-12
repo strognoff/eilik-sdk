@@ -11,6 +11,7 @@ Protocol reference: <https://github.com/uDamocles/EilikSerialController>
 - Serial settings compatible with the reference implementation: `125000` baud, `timeout=1`, `rts=False`, `dtr=True`
 - `HB1` handshake and keep-alive packet: `aa aa aa 0a 00 61 e4 c6 f1 ca 83 ff ad`
 - Dynamic 5-byte session token extraction from the handshake reply
+- Captured official-app status handshake fallback: `aa aa aa 04 00 01 fa`
 - Original servo command frame shape and checksum formula
 - High-level `EilikController` methods for simple actions
 - Packet logging to `logs/eilik.log`
@@ -140,9 +141,23 @@ Available high-level methods:
 
 The SDK preserves the packet format from `uDamocles/EilikSerialController`.
 
-If the robot opens over `/dev/ttyACM0` but does not reply to the public `HB1` handshake, capture the official app traffic and extract the real init flow. See [docs/CAPTURE_HANDSHAKE.md](docs/CAPTURE_HANDSHAKE.md).
+If the robot opens over `/dev/ttyACM0` but does not reply to the public `HB1` handshake, the SDK falls back to the official-app status request captured from `captures/eilik-official.pcapng`:
 
-Handshake:
+```text
+aa aa aa 04 00 01 fa
+```
+
+The captured official-app connect sequence was:
+
+1. `cmd=01` status request: `aa aa aa 04 00 01 fa`
+2. Robot `cmd=01` status reply with device/version-looking data
+3. `cmd=20` mode/index request: `aa aa aa 04 00 20 db`
+4. `cmd=02` session/index start: `aa aa aa 09 00 02 00 09 00 00 00 eb`
+5. Robot re-enumerates, acknowledges `cmd=02`, then the app sends many `cmd=03` action/resource path frames such as `a/0/01/00/01`
+
+After the official app performed this sequence, the robot began replying to the legacy `HB1` token handshake again, and SDK `wave` / `nod` commands succeeded over `/dev/ttyACM0`. The likely behavior is that the official app wakes or switches Eilik into the serial command mode expected by the public reference implementation. The captured official frames are still useful as a fallback/status probe and for future protocol work. See [docs/CAPTURE_HANDSHAKE.md](docs/CAPTURE_HANDSHAKE.md).
+
+Legacy `HB1` handshake:
 
 1. Send `HB1`: `aa aa aa 0a 00 61 e4 c6 f1 ca 83 ff ad`
 2. Read the robot reply

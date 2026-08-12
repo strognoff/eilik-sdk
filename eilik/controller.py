@@ -13,11 +13,13 @@ from .motions import MOTIONS
 from .protocol import (
     BAUD_RATE,
     HB1,
+    OFFICIAL_STATUS_REQUEST,
     REST_POSITION,
     SERIAL_TIMEOUT_SECONDS,
     ServoCommand,
     build_servo_frame,
     extract_session_token,
+    has_command_reply,
 )
 
 EILIK_USB_VID = 0x28E9
@@ -49,17 +51,22 @@ class EilikController:
 
         self._serial = None
         self._session_token: bytes | None = None
+        self._protocol_variant: str | None = None
         self._keepalive_stop = threading.Event()
         self._keepalive_thread: threading.Thread | None = None
         self._lock = threading.RLock()
 
     @property
     def connected(self) -> bool:
-        return bool(self._serial and getattr(self._serial, "is_open", False) and self._session_token)
+        return bool(self._serial and getattr(self._serial, "is_open", False) and self._protocol_variant)
 
     @property
     def session_token(self) -> bytes | None:
         return self._session_token
+
+    @property
+    def protocol_variant(self) -> str | None:
+        return self._protocol_variant
 
     @staticmethod
     def detect_port(preferred: str = "/dev/ttyACM0") -> str:
@@ -117,9 +124,14 @@ class EilikController:
                 raise EilikConnectionError(f"Could not open Eilik serial port {port}: {exc}") from exc
 
             self._serial = ser
-            self._session_token = self._handshake()
-            self._start_keepalive()
-            self.logger.info("CONNECTED token=%s", hex_bytes(self._session_token))
+            self._handshake()
+            if self._session_token:
+                self._start_keepalive()
+            self.logger.info(
+                "CONNECTED protocol=%s token=%s",
+                self._protocol_variant,
+                hex_bytes(self._session_token) if self._session_token else "none",
+            )
 
     def disconnect(self) -> None:
         """Stop keep-alive and close the serial device."""
@@ -138,6 +150,7 @@ class EilikController:
                     self.logger.info("DISCONNECT")
             self._serial = None
             self._session_token = None
+            self._protocol_variant = None
 
     def move_motor(self, motor_id: int, position: int) -> None:
         self._send_servo(motor_id, position)
@@ -207,21 +220,38 @@ class EilikController:
             if command.delay_after > 0:
                 time.sleep(command.delay_after)
 
-    def _handshake(self) -> bytes:
+    def _handshake(self) -> None:
         assert self._serial is not None
         self._write_raw(HB1, "TX_HANDSHAKE")
         time.sleep(0.3)
         reply = self._read_available()
+        if reply:
+            try:
+                self._session_token = extract_session_token(reply)
+                self._protocol_variant = "legacy-token"
+                return
+            except ValueError:
+                self.logger.info("LEGACY_HANDSHAKE_UNPARSED %s", hex_bytes(reply))
+
+        self.logger.info("LEGACY_HANDSHAKE_NO_TOKEN trying captured official status handshake")
+        self._serial.reset_input_buffer()
+        self._write_raw(OFFICIAL_STATUS_REQUEST, "TX_OFFICIAL_STATUS")
+        time.sleep(0.3)
+        reply = self._read_available()
         if not reply:
-            raise EilikConnectionError("No handshake reply from Eilik")
-        try:
-            return extract_session_token(reply)
-        except ValueError as exc:
-            raise EilikConnectionError(f"Could not parse Eilik session token from {hex_bytes(reply)}") from exc
+            raise EilikConnectionError("No handshake reply from Eilik using legacy HB1 or official status request")
+        if not has_command_reply(reply, 0x01):
+            raise EilikConnectionError(f"Could not parse official Eilik status reply from {hex_bytes(reply)}")
+        self._session_token = None
+        self._protocol_variant = "official-status"
 
     def _send_servo(self, motor_id: int, position: int) -> None:
         self._ensure_connected()
-        assert self._session_token is not None
+        if not self._session_token:
+            raise EilikConnectionError(
+                "This robot answered the captured official status protocol, but no servo/motion "
+                "command was present in the capture. Capture a RobotStudio/app movement to map motion commands."
+            )
         frame = build_servo_frame(self._session_token, motor_id, position)
         for attempt in range(self.reconnect_attempts + 1):
             try:

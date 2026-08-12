@@ -32,7 +32,7 @@ def root() -> dict[str, str]:
 
 @app.get("/health")
 def health() -> dict[str, object]:
-    return {"connected": controller.connected, "port": controller.port}
+    return {"connected": controller.connected, "port": controller.port, "protocol": controller.protocol_variant}
 
 
 @app.get("/status")

@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         controller.connect()
         if args.command == "connect":
-            print(f"Connected to Eilik on {controller.port}")
+            print(f"Connected to Eilik on {controller.port} using {controller.protocol_variant} protocol")
             return 0
         if args.command == "monitor":
             controller.monitor(args.monitor_log)
