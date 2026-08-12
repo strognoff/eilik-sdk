@@ -3,9 +3,10 @@ __pycache__/
 .pytest_cache/
 .venv/
 *.egg-info/
-captures/
-logs/*.log
-logs/*.txt
+captures/*.pcapng
+captures/*.pcap
+captures/*.bin
+captures/*.log
 !logs/.gitkeep
 # reversing: keep our RE reports, ignore raw binaries
 reversing/.venv/
