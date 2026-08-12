@@ -64,6 +64,15 @@ python cli.py look_left
 python cli.py look_right
 python cli.py reset
 python cli.py monitor
+
+# Display commands (decoded from EnergizeLab.exe reverse engineering)
+python cli.py read_display --output face.bin
+python cli.py write_display --image face.bin
+python cli.py write_display --image face.png        # auto-resize any PNG to 128x64
+python cli.py display_image --image face.png --invert
+python cli.py read_servo_angles
+python cli.py read_running_number
+python cli.py write_running_number --index 1
 ```
 
 Optional explicit serial port:
@@ -104,6 +113,27 @@ Endpoints:
 - `POST /look_left`
 - `POST /look_right`
 - `POST /reset`
+- `GET /servo/angles` — read live servo positions
+- `POST /display/image` — push a PNG (base64-encoded) to Eilik's screen
+- `POST /display/raw` — push a raw 1024-byte framebuffer to Eilik's screen
+- `POST /display/text` — render text (via Pillow) and push to Eilik's screen
+
+Examples:
+
+```bash
+# Show "Hello" on Eilik's face
+curl -X POST http://127.0.0.1:8765/display/text \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "Hello", "font_size": 16}'
+
+# Show an arbitrary PNG (base64-encoded)
+curl -X POST http://127.0.0.1:8765/display/image \
+  -H 'Content-Type: application/json' \
+  -d "{\"png_b64\": \"$(base64 -w0 face.png)\", \"invert\": false}"
+
+# Read live servo angles
+curl http://127.0.0.1:8765/servo/angles
+```
 
 Example:
 
@@ -138,10 +168,63 @@ Available high-level methods:
 - `right_arm_up()`
 - `right_arm_down()`
 - `reset_pose()`
+- `move_motor(motor_id, position)` — direct `cmd=0xA2` via canonical `format_data()`
+- `read_servo_angles()` — returns live servo positions
+- `read_display()` — returns 1024-byte framebuffer
+- `write_display(image_1024b)` — push raw framebuffer
+- `display_image(png_path, invert=False, threshold=128)` — push any PNG
+
+Display demo:
+
+```python
+from eilik import EilikController
+
+robot = EilikController()
+robot.connect()
+robot.display_image("smile.png", invert=False)  # show on screen
+robot.wave()
+robot.disconnect()
+```
 
 ## Protocol Notes
 
-The SDK preserves the packet format from `uDamocles/EilikSerialController`.
+The SDK uses the canonical `format_data()` packet format from
+`PackAnalyData.py` in the official `EnergizeLab.exe` (recovered via PyInstaller
+extraction + xdis byte-code disassembly). See
+[`reversing/_reports/energizelab_windows_app.md`](reversing/_reports/energizelab_windows_app.md).
+
+Packet format:
+
+```
+aa aa aa <length:u16-LE> <cmd> <payload> <checksum>
+```
+
+Where:
+- `length = len(payload) + 3` (covers length byte + cmd + checksum)
+- `checksum = (~sum(length_bytes + cmd + payload)) & 0xFF`
+
+Commands recovered from `EnergizeLab.exe`:
+
+| Cmd  | Purpose                           |
+|------|-----------------------------------|
+| 0x01 | Ping / MCU info                   |
+| 0x02 | Confirm upgrade                   |
+| 0x03 | Content update                    |
+| 0x04 | Firmware flash                    |
+| 0x05 | Firmware flash (direct)           |
+| 0x20 | Read all (2 KB)                   |
+| 0x21 | Read single                       |
+| 0x31 | Write specified                   |
+| 0x41 | Reinit SD                         |
+| 0x42 | Format SD                         |
+| 0xA1 | Read servo angles                 |
+| 0xA2 | Write servo angles (motion)       |
+| 0xA3 | Read display (1024 bytes)         |
+| 0xA4 | Write display (1024 bytes)        |
+| 0xA5 | Read running number (animation)   |
+| 0xA6 | Write running number              |
+
+The display is **128×64 1bpp monochrome SSD1306 page-mode**, 8 pages × 128 columns × LSB-first within each byte. `read_display` and `write_display` are wired into the controller + CLI + FastAPI.
 
 If the robot opens over `/dev/ttyACM0` but does not reply to the public `HB1` handshake, the SDK falls back to the official-app status request captured from `captures/eilik-official.pcapng`:
 
