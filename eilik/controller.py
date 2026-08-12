@@ -490,6 +490,209 @@ class EilikController:
         except Exception as exc:
             self.logger.warning("MOTION_FAILED %s %s", name, exc)
 
+    # === AMBIENT DISPLAYS (live data on face) ===
+    def show_clock(self, hour: int | None = None, minute: int | None = None,
+                   hold_seconds: float = 3.0, auto_idle: bool = True) -> bool:
+        """Show a live clock face (HH:MM)."""
+        from datetime import datetime
+        if hour is None or minute is None:
+            now = datetime.now()
+            hour = now.hour
+            minute = now.minute
+        from .ambient import render_clock_png
+        png = render_clock_png(hour, minute)
+        return self.display_image(png, hold_seconds=hold_seconds, auto_idle=auto_idle)
+
+    def show_streak(self, days: int, hold_seconds: float = 3.0,
+                    auto_idle: bool = True) -> bool:
+        """Show 'Day N' streak face."""
+        from .ambient import render_streak_png
+        png = render_streak_png(days)
+        return self.display_image(png, hold_seconds=hold_seconds, auto_idle=auto_idle)
+
+    def show_weather(self, condition: str, hold_seconds: float = 3.0,
+                     auto_idle: bool = True) -> bool:
+        """Show weather face (condition uppercase)."""
+        from .ambient import render_weather_png
+        png = render_weather_png(condition)
+        return self.display_image(png, hold_seconds=hold_seconds, auto_idle=auto_idle)
+
+    def show_pr(self, pr_number: int, author: str | None = None,
+                hold_seconds: float = 3.0, auto_idle: bool = True) -> bool:
+        """Show 'PR#N' or 'PR#N by AUTHOR' face."""
+        from .ambient import render_pr_png
+        png = render_pr_png(pr_number, author)
+        return self.display_image(png, hold_seconds=hold_seconds, auto_idle=auto_idle)
+
+    def show_calendar_nudge(self, minutes_until: int, meeting_title: str | None = None,
+                            hold_seconds: float = 3.0, auto_idle: bool = True) -> bool:
+        """Show '@Nmin TIT' calendar nudge face."""
+        from .ambient import render_calendar_png
+        png = render_calendar_png(minutes_until, meeting_title)
+        return self.display_image(png, hold_seconds=hold_seconds, auto_idle=auto_idle)
+
+    def show_energy_meter(self, soi_percent: int, hold_seconds: float = 3.0,
+                          auto_idle: bool = True) -> bool:
+        """Show 'SoI: NN%' energy meter face."""
+        from .ambient import render_energy_meter_png
+        png = render_energy_meter_png(soi_percent)
+        return self.display_image(png, hold_seconds=hold_seconds, auto_idle=auto_idle)
+
+    def show_mood(self, mood: str, hold_seconds: float = 3.0,
+                  auto_idle: bool = True) -> bool:
+        """Show mood face (mood uppercase)."""
+        from .ambient import render_mood_png
+        png = render_mood_png(mood)
+        return self.display_image(png, hold_seconds=hold_seconds, auto_idle=auto_idle)
+
+    def show_crypto_ticker(self, ticker: str, change_pct: float,
+                           hold_seconds: float = 3.0, auto_idle: bool = True) -> bool:
+        """Show 'TICKER +5%↑' crypto ticker face."""
+        from .ambient import render_crypto_ticker_png
+        png = render_crypto_ticker_png(ticker, change_pct)
+        return self.display_image(png, hold_seconds=hold_seconds, auto_idle=auto_idle)
+
+    def show_tts_text(self, text: str, hold_seconds: float = 4.0,
+                      auto_idle: bool = True) -> bool:
+        """Show longer text face for TTS-style display."""
+        from .ambient import render_tts_text_png
+        png = render_tts_text_png(text)
+        return self.display_image(png, hold_seconds=hold_seconds, auto_idle=auto_idle)
+
+    # === COMPOUND / CHOREOGRAPHY ===
+    def choreography(self, steps: list[dict], inter_step_delay: float = 0.5) -> None:
+        """Run a sequence of actions/display/motion calls as a single routine.
+
+        Each step is a dict:
+          {"action": "morning"}            # call action(name)
+          {"motion": "wave"}                # call _run_motion(name)
+          {"ambient": "clock"}             # show ambient face
+          {"text": "hi!", "hold": 2}        # show custom face text
+          {"wait": 1.0}                     # wait N seconds
+          {"face": "got_it.png"}           # show named face (raw PNG)
+        """
+        for step in steps:
+            kind = next(iter(step.keys())) if step else None
+            if kind is None:
+                continue
+            value = step[kind]
+            if kind == "action":
+                self.action(value)
+            elif kind == "motion":
+                try:
+                    self._run_motion(value)
+                except Exception as exc:
+                    self.logger.warning("CHOREO_MOTION_FAILED %s %s", value, exc)
+            elif kind == "ambient":
+                fn = getattr(self, f'show_{value}', None)
+                if fn:
+                    # Pass through any extra kwargs from the step dict
+                    kwargs = {k: v for k, v in step.items() if k not in ('ambient',)}
+                    # Convert hold_seconds / auto_idle keys to match method signature
+                    if 'hold' in kwargs:
+                        kwargs['hold_seconds'] = kwargs.pop('hold')
+                    fn(**kwargs)
+            elif kind == "text":
+                hold = step.get('hold', 2.0)
+                auto_idle = step.get('auto_idle', True)
+                from PIL import Image, ImageDraw, ImageFont
+                img = Image.new('L', (128, 64), 255)
+                draw = ImageDraw.Draw(img)
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
+                bbox = draw.textbbox((0, 0), value, font=font)
+                tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                x = (128 - tw) // 2 - bbox[0]
+                y = (64 - th) // 2 - bbox[1]
+                draw.text((x, y), value, fill=0, font=font)
+                tmp = Path('/tmp/choreo_text.png')
+                img.save(tmp)
+                self.display_image(tmp, hold_seconds=hold, auto_idle=auto_idle)
+            elif kind == "wait":
+                time.sleep(float(value))
+            elif kind == "face":
+                p = Path(value)
+                hold = step.get('hold', 2.0)
+                self.display_image(p, hold_seconds=hold)
+            time.sleep(inter_step_delay)
+
+    def morning_routine(self) -> None:
+        """Default morning routine."""
+        self.choreography([
+            {"action": "good_morning"},
+            {"wait": 0.5},
+            {"ambient": "energy_meter", "soi_percent": 87},
+            {"wait": 1.0},
+            {"ambient": "weather", "condition": "sun"},
+            {"wait": 1.0},
+            {"action": "hi_jeff"},
+        ], inter_step_delay=0.3)
+
+    def task_completed(self) -> None:
+        """Default celebration when a task completes."""
+        self.action('status_done')
+
+    def task_failed(self) -> None:
+        """Default apology when something fails."""
+        self.choreography([
+            {"action": "frustrated"},
+            {"wait": 1.0},
+            {"text": "sorry", "hold": 2},
+        ], inter_step_delay=0.3)
+
+    def thinking_handoff(self) -> None:
+        """Nova is about to spawn a subagent."""
+        self.choreography([
+            {"action": "thinking"},
+        ], inter_step_delay=0.2)
+
+    def subagent_returned(self, name: str = "") -> None:
+        """Nova's subagent has returned."""
+        steps = [{"action": "got_it"}]
+        if name:
+            steps.append({"text": name[:8], "hold": 1.5})
+        self.choreography(steps, inter_step_delay=0.3)
+
+    def cron_tick_done(self, cron_name: str = "") -> None:
+        """A cron successfully completed a tick."""
+        steps = [{"action": "done"}]
+        if cron_name:
+            steps.append({"text": cron_name[:8], "hold": 1.5})
+        self.choreography(steps, inter_step_delay=0.3)
+
+    def error_flash(self, message: str = "") -> None:
+        """Something crashed."""
+        steps = [{"action": "status_error"}]
+        if message:
+            steps.append({"text": message[:8], "hold": 1.5})
+        self.choreography(steps, inter_step_delay=0.3)
+
+    def email_arrived(self, sender: str = "") -> None:
+        """New email at the high-priority inbox."""
+        steps = [{"action": "email_new"}]
+        if sender:
+            steps.append({"text": sender[:8], "hold": 1.5})
+        self.choreography(steps, inter_step_delay=0.3)
+
+    def pr_alert(self, pr_number: int = 0, author: str = "") -> None:
+        """A new PR opened."""
+        self.show_pr(pr_number, author)
+
+    def quinn_comms(self) -> None:
+        """Quinn pinged in chat."""
+        self.action('quinn_comms')
+
+    def crypto_pumped(self, ticker: str = "BTC", pct: float = 5.0) -> None:
+        """A target coin moved >5% in an hour."""
+        self.show_crypto_ticker(ticker, pct)
+
+    def welcome_back(self) -> None:
+        """Jeff opened chat after >2h silence."""
+        self.choreography([
+            {"action": "welcome_back"},
+            {"wait": 0.5},
+            {"action": "wave"},
+        ], inter_step_delay=0.4)
+
     def monitor(self, output_path: str | Path = "logs/eilik-monitor.log") -> None:
         """Continuously print and save incoming serial chunks as hex frames."""
 
