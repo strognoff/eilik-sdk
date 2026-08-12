@@ -2,6 +2,8 @@
 
 Reusable Python SDK, CLI, packet monitor, and FastAPI controller service for an Eilik robot connected over USB serial. It is designed to run in WSL today and move unchanged to a Raspberry Pi later.
 
+This has nothing to do with Energize Lab, there is no official support.
+
 Protocol reference: <https://github.com/uDamocles/EilikSerialController>
 
 ## What This Implements
