@@ -317,71 +317,62 @@ class EilikController:
         fb = to_framebuffer(gray, threshold=threshold)
         return self.write_display(fb)
 
-    def _safe_auto_reset(self) -> None:
-        """Try to return the robot to rest pose without raising on failure."""
-        try:
-            self._run_motion("reset_pose")
-        except Exception as exc:
-            self.logger.warning("AUTO_RESET_FAILED %s", exc)
-
     def reset_pose(self) -> None:
         self._run_motion("reset_pose")
 
     def wave(self) -> None:
         self._run_motion("wave")
-        self._safe_auto_reset()
 
     def nod(self) -> None:
         self._run_motion("nod")
-        self._safe_auto_reset()
 
     def shake_head(self) -> None:
         self._run_motion("shake_head")
-        self._safe_auto_reset()
 
     def look_left(self) -> None:
         self._run_motion("look_left")
-        self._safe_auto_reset()
 
     def look_right(self) -> None:
         self._run_motion("look_right")
-        self._safe_auto_reset()
 
     def left_arm_up(self) -> None:
         self._run_motion("left_arm_up")
-        self._safe_auto_reset()
 
     def left_arm_down(self) -> None:
         self._run_motion("left_arm_down")
-        self._safe_auto_reset()
 
     def right_arm_up(self) -> None:
         self._run_motion("right_arm_up")
-        self._safe_auto_reset()
 
     def right_arm_down(self) -> None:
         self._run_motion("right_arm_down")
-        self._safe_auto_reset()
 
     def display_image(self, png_path: str | Path, threshold: int = 128,
-                      invert: bool = False, auto_reset: bool = True) -> bool:
+                      invert: bool = False, hold_seconds: float = 0.0,
+                      auto_idle: bool = True) -> bool:
         """Convert a PNG (any size; auto-resized to 128x64) to a 1024-byte
         framebuffer and push it via `cmd=0xA4`.
 
         Use `invert=True` if the source PNG is white-on-black (Eilik's OLED
         is black-on-white, so most PNGs need inversion).
 
-        With `auto_reset=True` (default), the display is cleared to a blank
-        framebuffer after a short hold so the robot doesn't get stuck showing
-        a stale face.
+        With `hold_seconds=N`, the face stays for N seconds before reverting.
+        With `auto_idle=True` (default), the firmware's default idle face is
+        restored after the hold. This puts the robot back to its true idle
+        state instead of a blank/cleared screen, so the firmware's idle
+        animation loop resumes naturally.
         """
         ok = self._display_image_raw(png_path, threshold=threshold, invert=invert)
-        if auto_reset and ok:
+        if ok and (hold_seconds > 0 or auto_idle):
             try:
-                time.sleep(2.0)  # let the user see the face for ~2s
-                self.write_display(bytes(1024))  # clear to blank
-            except Exception:
-                pass
+                if hold_seconds > 0:
+                    time.sleep(hold_seconds)
+                if auto_idle:
+                    idle_path = Path(__file__).resolve().parent.parent / "captures" / "eilik-display-cmd-A3.png"
+                    if idle_path.exists():
+                        self._display_image_raw(idle_path, threshold=128, invert=False)
+            except Exception as exc:
+                self.logger.warning("AUTO_IDLE_FAILED %s", exc)
         return ok
 
     def _display_image_raw(self, png_path: str | Path, threshold: int = 128,

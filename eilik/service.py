@@ -75,7 +75,7 @@ def reset() -> dict[str, str]:
 def display_image(payload: dict) -> dict[str, str]:
     """Push a PNG (base64-encoded) to Eilik's screen.
 
-    Body: {"png_b64": "...", "invert": false, "threshold": 128}
+    Body: {"png_b64": "...", "invert": false, "threshold": 128, "hold_seconds": 2.0, "auto_idle": true}
     """
     import base64
     from pathlib import Path
@@ -84,12 +84,15 @@ def display_image(payload: dict) -> dict[str, str]:
         return {"status": "error", "message": "png_b64 required"}
     invert = bool(payload.get("invert", False))
     threshold = int(payload.get("threshold", 128))
+    hold_seconds = float(payload.get("hold_seconds", 2.0))
+    auto_idle = bool(payload.get("auto_idle", True))
     data = base64.b64decode(png_b64)
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         f.write(data)
         tmp = Path(f.name)
     try:
-        ok = controller.display_image(tmp, invert=invert, threshold=threshold)
+        ok = controller.display_image(tmp, invert=invert, threshold=threshold,
+                                       hold_seconds=hold_seconds, auto_idle=auto_idle)
     finally:
         tmp.unlink(missing_ok=True)
     return {"status": "ok" if ok else "error", "acked": "true" if ok else "false"}
@@ -113,12 +116,13 @@ def display_raw(payload: dict) -> dict[str, str]:
 def display_text(payload: dict) -> dict[str, str]:
     """Render text to a 128x64 framebuffer and push it. Uses PIL.
 
-    Body: {"text": "Hello", "font_size": 16, "auto_reset": true}
+    Body: {"text": "Hello", "font_size": 16, "hold_seconds": 2.0, "auto_idle": true}
     """
     text = payload.get("text", "")
     font_size = int(payload.get("font_size", 16))
     invert = bool(payload.get("invert", True))
-    auto_reset = bool(payload.get("auto_reset", True))
+    hold_seconds = float(payload.get("hold_seconds", 2.0))
+    auto_idle = bool(payload.get("auto_idle", True))
     try:
         from PIL import Image, ImageDraw, ImageFont
     except ImportError:
@@ -138,7 +142,8 @@ def display_text(payload: dict) -> dict[str, str]:
         f.write(buf.getvalue())
         tmp = Path(f.name)
     try:
-        ok = controller.display_image(tmp, invert=False, auto_reset=auto_reset)
+        ok = controller.display_image(tmp, invert=False,
+                                       hold_seconds=hold_seconds, auto_idle=auto_idle)
     finally:
         tmp.unlink(missing_ok=True)
     return {"status": "ok" if ok else "error", "acked": "true" if ok else "false", "text": text}
