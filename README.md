@@ -82,6 +82,7 @@ Endpoints:
 
 - `GET /`
 - `GET /health`
+- `GET /status`
 - `POST /wave`
 - `POST /nod`
 - `POST /look_left`

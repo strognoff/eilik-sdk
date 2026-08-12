@@ -35,6 +35,11 @@ def health() -> dict[str, object]:
     return {"connected": controller.connected, "port": controller.port}
 
 
+@app.get("/status")
+def status() -> dict[str, object]:
+    return health()
+
+
 @app.post("/wave")
 def wave() -> dict[str, str]:
     controller.wave()
