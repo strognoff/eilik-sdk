@@ -419,6 +419,77 @@ class EilikController:
         except Exception as exc:
             self.logger.warning("AUTO_RESET_FAILED %s", exc)
 
+    def action(self, name: str, hold_seconds: float | None = None,
+               async_motion: bool = True, auto_idle: bool = True) -> bool:
+        """Run a high-level action from `eilik/actions.py`.
+
+        Each action combines an optional face flash + optional motion + a hold
+        time. Use `async_motion=True` (default) to run the motion in parallel
+        with the face flash so the gestures actually overlap the face.
+
+        `hold_seconds=None` falls back to the action's default.
+
+        Returns True if the face was successfully flashed (or skipped cleanly).
+        """
+        from .actions import get_action, resolve_face
+        spec = get_action(name)
+        motion_name = spec.get("motion")
+        face_tag = spec.get("face")
+        action_hold = spec.get("hold", 0)
+        if hold_seconds is None:
+            hold_seconds = action_hold
+
+        ok = True
+        # Show face first (lock firmware in user-display mode)
+        if face_tag:
+            face_path = resolve_face(face_tag)
+            try:
+                ok = self.display_image(face_path, auto_idle=False)
+            except Exception as exc:
+                self.logger.warning("ACTION_FACE_FAILED %s tag=%s %s", name, face_tag, exc)
+                ok = False
+
+        # Run motion (parallel if face shown)
+        if motion_name:
+            try:
+                if async_motion and face_tag:
+                    import threading
+                    t = threading.Thread(target=self._safe_run_motion, args=(motion_name,),
+                                         daemon=True)
+                    t.start()
+                else:
+                    self._run_motion(motion_name)
+            except Exception as exc:
+                self.logger.warning("ACTION_MOTION_FAILED %s motion=%s %s", name, motion_name, exc)
+
+        # Hold face visible for the action duration
+        if hold_seconds and hold_seconds > 0:
+            time.sleep(hold_seconds)
+
+        # Restore firmware idle (release user-display lock)
+        if auto_idle:
+            idle_path = Path(__file__).resolve().parent.parent / "captures" / "eilik-display-cmd-A3.png"
+            if idle_path.exists() and ok:
+                try:
+                    self._display_image_raw(idle_path, threshold=128, invert=False, auto_rotate=True)
+                    with self._lock:
+                        if self._serial is not None:
+                            self._write_raw(
+                                _write_running_number(RELEASE_DISPLAY_RUNNING_NUMBER),
+                                f"TX_WRITE_RUNNING idx={RELEASE_DISPLAY_RUNNING_NUMBER} (release)"
+                            )
+                except Exception as exc:
+                    self.logger.warning("ACTION_AUTO_IDLE_FAILED %s", exc)
+
+        return ok
+
+    def _safe_run_motion(self, name: str) -> None:
+        """Run a motion without raising."""
+        try:
+            self._run_motion(name)
+        except Exception as exc:
+            self.logger.warning("MOTION_FAILED %s %s", name, exc)
+
     def monitor(self, output_path: str | Path = "logs/eilik-monitor.log") -> None:
         """Continuously print and save incoming serial chunks as hex frames."""
 
