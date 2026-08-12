@@ -73,6 +73,24 @@ python cli.py display_image --image face.png --invert
 python cli.py read_servo_angles
 python cli.py read_running_number
 python cli.py write_running_number --index 1
+
+# Stage 2: high-level actions, ambient, choreography, events
+python cli.py list_actions
+python cli.py action --name heart_eyes
+python cli.py ambient --ambient clock --text 23:25 --hold 3
+python cli.py ambient --ambient streak --text 7 --hold 2
+python cli.py ambient --ambient pr --text 42=quinn --hold 2
+python cli.py ambient --ambient energy_meter --text 87 --hold 2
+python cli.py ambient --ambient crypto --text BTC=5.2 --hold 2
+python cli.py ambient --ambient tts --text "hello there"
+python cli.py choreo --name '[{"action": "hi_jeff"}, {"wait": 1}, {"motion": "wave"}]'
+python cli.py morning
+python cli.py welcome
+python cli.py cron_done --name "morning brief"
+python cli.py error --name "sync failed"
+python cli.py subagent_done --name "Quinn"
+python cli.py email --name "jeff"
+python cli.py quinn
 ```
 
 Optional explicit serial port:
@@ -86,8 +104,6 @@ Monitor mode continuously reads incoming bytes, prints timestamped hex chunks, a
 ```bash
 python cli.py monitor
 ```
-
-This is intended for later reverse engineering of touch sensors, tilt sensors, pickup detection, battery information, and emotion events.
 
 ## FastAPI Service
 
@@ -103,7 +119,7 @@ With an explicit serial device:
 python cli.py serve --port /dev/ttyACM0 --host 127.0.0.1 --port-http 8765
 ```
 
-Endpoints:
+### Motion endpoints
 
 - `GET /`
 - `GET /health`
@@ -114,9 +130,35 @@ Endpoints:
 - `POST /look_right`
 - `POST /reset`
 - `GET /servo/angles` — read live servo positions
+
+### Display endpoints
+
 - `POST /display/image` — push a PNG (base64-encoded) to Eilik's screen
 - `POST /display/raw` — push a raw 1024-byte framebuffer to Eilik's screen
 - `POST /display/text` — render text (via Pillow) and push to Eilik's screen
+
+### Stage 2: actions / ambient / events
+
+- `POST /action {name, hold_seconds, auto_idle}` — run any of 58 actions
+- `GET /actions` — list all actions
+- `POST /ambient/clock {hour, minute, hold_seconds}` — live clock face
+- `POST /ambient/streak {days}` — "Day N" streak face
+- `POST /ambient/weather {condition}` — uppercase condition face
+- `POST /ambient/pr {pr_number, author}` — "PR#N by Author"
+- `POST /ambient/calendar {minutes_until, meeting_title}` — "@Nmin Title"
+- `POST /ambient/energy {soi_percent}` — "SoI: NN%"
+- `POST /ambient/mood {mood}` — mood word face
+- `POST /ambient/crypto {ticker, change_pct}` — "BTC +5%↑"
+- `POST /ambient/tts {text}` — long text face (auto-splits)
+- `POST /morning` — run morning routine
+- `POST /welcome` — wave + bow + "Welcome!"
+- `POST /event/cron_done {name}` — ✓ + name
+- `POST /event/error {message}` — X + message
+- `POST /event/subagent_returned {name}` — got_it + name
+- `POST /event/email {sender}` — @ + sender
+- `POST /event/quinn` — "Quinn!" + wave
+- `POST /event/crypto_pumped {ticker, pct}` — crypto ticker face
+- `POST /choreo {steps: [...]}` — run a step-by-step routine
 
 Examples:
 
@@ -133,6 +175,13 @@ curl -X POST http://127.0.0.1:8765/display/image \
 
 # Read live servo angles
 curl http://127.0.0.1:8765/servo/angles
+
+# Stage 2 examples
+curl -X POST http://127.0.0.1:8765/action -H 'Content-Type: application/json' -d '{"name": "hi_jeff"}'
+curl -X POST http://127.0.0.1:8765/ambient/clock -H 'Content-Type: application/json' -d '{"hour": 23, "minute": 25}'
+curl -X POST http://127.0.0.1:8765/ambient/pr -H 'Content-Type: application/json' -d '{"pr_number": 42, "author": "quinn"}'
+curl -X POST http://127.0.0.1:8765/event/cron_done -H 'Content-Type: application/json' -d '{"name": "morning"}'
+curl -X POST http://127.0.0.1:8765/morning -H 'Content-Type: application/json' -d '{}'
 ```
 
 Example:
@@ -173,6 +222,65 @@ Available high-level methods:
 - `read_display()` — returns 1024-byte framebuffer
 - `write_display(image_1024b)` — push raw framebuffer
 - `display_image(png_path, invert=False, threshold=128)` — push any PNG
+
+### High-level actions (58 total)
+
+Every action combines a face flash + a motion. List via `python -m eilik.cli list_actions`. Examples:
+
+```python
+robot.action("message")       # wave + "Message!! :)"
+robot.action("good_morning")  # wave + "Morning! :)"
+robot.action("heart_eyes")    # heart hands + "♥_♥"
+robot.action("thinking")      # peek + "..."
+robot.action("status_done")   # thumbs up + "DONE"
+robot.action("trivia_correct")# thumbs up + "YES!"
+```
+
+### Ambient displays (live data on face)
+
+```python
+robot.show_clock(hour=23, minute=25)        # HH:MM clock
+robot.show_streak(days=7)                   # "Day 7"
+robot.show_weather("sun")                   # uppercase condition
+robot.show_pr(42, author="quinn")           # PR notification
+robot.show_calendar_nudge(5, "Catchup")     # "@5min Catchup"
+robot.show_energy_meter(87)                 # "SoI: 87%"
+robot.show_mood("happy")                    # mood face
+robot.show_crypto_ticker("BTC", 5.2)        # "BTC +5%↑"
+robot.show_tts_text("hello there")          # long text face
+```
+
+### Compound actions / event bridges
+
+```python
+robot.morning_routine()                     # greeting + energy + weather + wave
+robot.task_completed()                      # status_done + thumbs up
+robot.task_failed()                         # frustrated + "sorry"
+robot.thinking_handoff()                    # "..." + peek
+robot.subagent_returned("Quinn")            # got_it + Quinn!
+robot.cron_tick_done("morning brief")       # ✓ + cron name
+robot.error_flash("sync failed")            # X + error message
+robot.email_arrived("jeff")                 # @ + sender
+robot.pr_alert(42, "quinn")                 # PR notification
+robot.quinn_comms()                         # "Quinn!" + wave
+robot.crypto_pumped("BTC", 5.0)             # crypto ticker face
+robot.welcome_back()                        # bow + wave
+```
+
+### Choreography DSL
+
+```python
+robot.choreography([
+    {"action": "good_morning"},
+    {"ambient": "clock", "text": "07:30"},
+    {"ambient": "energy_meter", "soi_percent": 87},
+    {"ambient": "weather", "condition": "sun"},
+    {"wait": 1.0},
+    {"motion": "wave"},
+], inter_step_delay=0.3)
+```
+
+Step types: `action`, `motion`, `ambient`, `text`, `face`, `wait`.
 
 Display demo:
 
