@@ -16,7 +16,7 @@ Protocol reference: <https://github.com/uDamocles/EilikSerialController>
 - Captured official-app status handshake fallback: `aa aa aa 04 00 01 fa`
 - Original servo command frame shape and checksum formula
 - High-level `EilikController` methods for simple actions
-- Packet logging to `logs/eilik.log`
+- Bounded rotating API/packet logging to `logs/eilik.log`
 - Monitor/sniffer mode for reverse engineering sensors and events
 - FastAPI endpoints for local service control
 - Unit tests for checksum, frame generation, and token parsing
@@ -129,11 +129,19 @@ can return to its normal autonomous/playful behavior.
 - `GET /`
 - `GET /health` — service health only; does not open the serial device
 - `GET /status` — alias for `/health`; `connected=false` is expected between commands
+- `GET /motions` — list every available motion and motor name
 - `POST /wave`
 - `POST /nod`
+- `POST /shake_head`
 - `POST /look_left`
 - `POST /look_right`
+- `POST /left_arm_up`
+- `POST /left_arm_down`
+- `POST /right_arm_up`
+- `POST /right_arm_down`
 - `POST /reset`
+- `POST /motion/{name}` — run any named motion from `/motions`
+- `POST /servo/move` — direct motor position, e.g. `{"motor": "right_arm", "position": 500}`
 - `GET /servo/angles` — read live servo positions
 
 ### Display endpoints
@@ -143,6 +151,23 @@ can return to its normal autonomous/playful behavior.
 - `POST /display/text` — render text (via Pillow) and push to Eilik's screen
 - `POST /display/idle` — restore the known calm idle-eye face
 - `POST /display/release` — diagnostic-only user-display release; on current firmware this may redraw the static wave/status icon
+
+`/display/text` and `/display/image` default to `auto_idle=false`. That means
+the API does not silently write the captured half-eye idle face after a custom
+display. Pass `auto_idle=true` only when that cleanup is explicitly wanted.
+
+### Routines
+
+- `POST /routine/display_text_arms` — one on-demand serial session that writes text, moves both arms up/down for `duration_seconds`, then applies the requested cleanup
+- `POST /test/display-text-arms` — alias for curl experiments
+
+Cleanup options:
+
+- `disconnect_only` — default; sends no cleanup commands after the routine
+- `arms_down` — finishes with both arms down
+- `arms_rest` — finishes with both arms at `1500`
+- `reset_pose` — runs the SDK reset pose
+- `idle_face` — writes the captured idle face; use only when explicitly wanted
 
 ### Stage 2: actions / ambient / events
 
@@ -167,13 +192,39 @@ can return to its normal autonomous/playful behavior.
 - `POST /event/crypto_pumped {ticker, pct}` — crypto ticker face
 - `POST /choreo {steps: [...]}` — run a step-by-step routine
 
+### Logs
+
+- `GET /logs/recent?lines=120` — inspect recent API and packet logs
+
+The log file is bounded by rotation so it cannot grow forever:
+
+- `EILIK_LOG_PATH` defaults to `logs/eilik.log`
+- `EILIK_LOG_MAX_BYTES` defaults to `1000000`
+- `EILIK_LOG_BACKUP_COUNT` defaults to `5`
+
 Examples:
 
 ```bash
 # Show "Hello" on Eilik's face
 curl -X POST http://127.0.0.1:8765/display/text \
   -H 'Content-Type: application/json' \
-  -d '{"text": "Hello", "font_size": 16}'
+  -d '{"text": "Hello", "font_size": 16, "hold_seconds": 5, "auto_idle": false}'
+
+# Run the exact bridge test: text + both arms for 5 seconds, no hidden cleanup
+curl -X POST http://127.0.0.1:8765/routine/display_text_arms \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "Hello Alice!!", "duration_seconds": 5, "cleanup": "disconnect_only"}'
+
+# Run a named motion
+curl -X POST http://127.0.0.1:8765/motion/wave
+
+# Move one motor directly
+curl -X POST http://127.0.0.1:8765/servo/move \
+  -H 'Content-Type: application/json' \
+  -d '{"motor": "right_arm", "position": 500}'
+
+# Inspect recent logs
+curl 'http://127.0.0.1:8765/logs/recent?lines=80'
 
 # Show an arbitrary PNG (base64-encoded)
 curl -X POST http://127.0.0.1:8765/display/image \

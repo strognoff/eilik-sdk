@@ -4,15 +4,41 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
+import uuid
+from collections import deque
+from pathlib import Path
+from typing import Callable, TypeVar
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from .controller import EilikController
+from .logger import setup_logger
+from .motions import MOTIONS
+from .protocol import (
+    MAX_POSITION,
+    MIN_POSITION,
+    MOTOR_HEAD,
+    MOTOR_LEFT_ARM,
+    MOTOR_RIGHT_ARM,
+    MOTOR_TORSO,
+    REST_POSITION,
+    validate_motor_id,
+)
 
 SERVICE_PORT = os.getenv("EILIK_PORT") or None
 LOG_PATH = os.getenv("EILIK_LOG_PATH", "logs/eilik.log")
+SERVICE_LOGGER = setup_logger(LOG_PATH)
 app = FastAPI(title="Eilik Controller Service", version="0.1.0")
+T = TypeVar("T")
+
+MOTOR_NAMES = {
+    "right_arm": MOTOR_RIGHT_ARM,
+    "left_arm": MOTOR_LEFT_ARM,
+    "torso": MOTOR_TORSO,
+    "head": MOTOR_HEAD,
+}
 
 
 class OnDemandController:
@@ -37,21 +63,86 @@ class OnDemandController:
 
     def __getattr__(self, name: str):
         def call(*args, **kwargs):
-            robot = EilikController(
-                port=SERVICE_PORT,
-                log_path=LOG_PATH,
-                enable_keepalive=False,
-            )
-            try:
-                robot.connect()
-                return getattr(robot, name)(*args, **kwargs)
-            finally:
-                robot.disconnect()
+            return self.run(name, lambda robot: getattr(robot, name)(*args, **kwargs))
 
         return call
 
+    def run(self, operation: str, fn: Callable[[EilikController], T]) -> T:
+        request_id = uuid.uuid4().hex[:12]
+        started = time.monotonic()
+        SERVICE_LOGGER.info("API_START id=%s operation=%s", request_id, operation)
+        robot = EilikController(
+            port=SERVICE_PORT,
+            log_path=LOG_PATH,
+            enable_keepalive=False,
+        )
+        try:
+            robot.connect()
+            result = fn(robot)
+            SERVICE_LOGGER.info(
+                "API_END id=%s operation=%s status=ok duration_ms=%s",
+                request_id,
+                operation,
+                round((time.monotonic() - started) * 1000),
+            )
+            return result
+        except Exception as exc:
+            SERVICE_LOGGER.exception(
+                "API_END id=%s operation=%s status=error duration_ms=%s error=%s",
+                request_id,
+                operation,
+                round((time.monotonic() - started) * 1000),
+                exc,
+            )
+            raise
+        finally:
+            robot.disconnect()
+
 
 controller = OnDemandController()
+
+
+def _bool(payload: dict, name: str, default: bool = False) -> bool:
+    return bool(payload.get(name, default))
+
+
+def _float(payload: dict, name: str, default: float) -> float:
+    return float(payload.get(name, default))
+
+
+def _int(payload: dict, name: str, default: int) -> int:
+    return int(payload.get(name, default))
+
+
+def _motor_id(value: object) -> int:
+    if isinstance(value, str) and value in MOTOR_NAMES:
+        return MOTOR_NAMES[value]
+    try:
+        motor_id = int(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="motor must be one of right_arm, left_arm, torso, head, or 1..4") from exc
+    try:
+        validate_motor_id(motor_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return motor_id
+
+
+def _position(value: object) -> int:
+    try:
+        position = int(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="position must be an integer 0..3000") from exc
+    if not MIN_POSITION <= position <= MAX_POSITION:
+        raise HTTPException(status_code=400, detail=f"position must be between {MIN_POSITION} and {MAX_POSITION}")
+    return position
+
+
+def _tail(path: Path, line_count: int) -> list[str]:
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8", errors="replace") as fh:
+        return [line.rstrip("\n") for line in deque(fh, maxlen=line_count)]
 
 
 @app.get("/")
@@ -73,6 +164,22 @@ def health() -> dict[str, object]:
 @app.get("/status")
 def status() -> dict[str, object]:
     return health()
+
+
+@app.get("/logs/recent")
+def recent_logs(lines: int = 120) -> dict[str, object]:
+    """Return recent bounded API/packet log lines for inspection."""
+    line_count = max(1, min(int(lines), 1000))
+    path = Path(LOG_PATH)
+    rotated = sorted(path.parent.glob(path.name + ".*")) if path.parent.exists() else []
+    return {
+        "path": str(path),
+        "max_bytes": int(os.getenv("EILIK_LOG_MAX_BYTES", "1000000")),
+        "backup_count": int(os.getenv("EILIK_LOG_BACKUP_COUNT", "5")),
+        "rotated_files": [str(p) for p in rotated],
+        "line_count": line_count,
+        "lines": _tail(path, line_count),
+    }
 
 
 @app.get("/diagnostic/snapshot")
@@ -107,6 +214,12 @@ def nod() -> dict[str, str]:
     return {"status": "ok", "action": "nod"}
 
 
+@app.post("/shake_head")
+def shake_head() -> dict[str, str]:
+    controller.shake_head()
+    return {"status": "ok", "action": "shake_head"}
+
+
 @app.post("/look_left")
 def look_left() -> dict[str, str]:
     controller.look_left()
@@ -119,10 +232,64 @@ def look_right() -> dict[str, str]:
     return {"status": "ok", "action": "look_right"}
 
 
+@app.post("/left_arm_up")
+def left_arm_up() -> dict[str, str]:
+    controller.left_arm_up()
+    return {"status": "ok", "action": "left_arm_up"}
+
+
+@app.post("/left_arm_down")
+def left_arm_down() -> dict[str, str]:
+    controller.left_arm_down()
+    return {"status": "ok", "action": "left_arm_down"}
+
+
+@app.post("/right_arm_up")
+def right_arm_up() -> dict[str, str]:
+    controller.right_arm_up()
+    return {"status": "ok", "action": "right_arm_up"}
+
+
+@app.post("/right_arm_down")
+def right_arm_down() -> dict[str, str]:
+    controller.right_arm_down()
+    return {"status": "ok", "action": "right_arm_down"}
+
+
 @app.post("/reset")
 def reset() -> dict[str, str]:
     controller.reset_pose()
     return {"status": "ok", "action": "reset"}
+
+
+@app.get("/motions")
+def list_motions() -> dict[str, object]:
+    return {
+        "count": len(MOTIONS),
+        "motions": sorted(MOTIONS.keys()),
+        "motors": MOTOR_NAMES,
+        "position_range": {"min": MIN_POSITION, "rest": REST_POSITION, "max": MAX_POSITION},
+    }
+
+
+@app.post("/motion/{name}")
+def run_motion(name: str) -> dict[str, str]:
+    if name not in MOTIONS:
+        raise HTTPException(status_code=404, detail=f"unknown motion: {name}")
+    controller.run(f"motion.{name}", lambda robot: robot._run_motion(name))
+    return {"status": "ok", "action": name}
+
+
+@app.post("/servo/move")
+def servo_move(payload: dict) -> dict[str, object]:
+    """Move one motor directly.
+
+    Body: {"motor": "right_arm" | 1, "position": 500}
+    """
+    motor_id = _motor_id(payload.get("motor", payload.get("motor_id")))
+    position = _position(payload.get("position"))
+    controller.move_motor(motor_id, position)
+    return {"status": "ok", "motor_id": motor_id, "position": position}
 
 
 @app.post("/display/release")
@@ -143,7 +310,7 @@ def display_idle() -> dict[str, str]:
 def display_image(payload: dict) -> dict[str, str]:
     """Push a PNG (base64-encoded) to Eilik's screen.
 
-    Body: {"png_b64": "...", "invert": false, "threshold": 128, "hold_seconds": 2.0, "auto_idle": true}
+    Body: {"png_b64": "...", "invert": false, "threshold": 128, "hold_seconds": 2.0, "auto_idle": false}
     """
     import base64
     from pathlib import Path
@@ -153,7 +320,7 @@ def display_image(payload: dict) -> dict[str, str]:
     invert = bool(payload.get("invert", False))
     threshold = int(payload.get("threshold", 128))
     hold_seconds = float(payload.get("hold_seconds", 2.0))
-    auto_idle = bool(payload.get("auto_idle", True))
+    auto_idle = bool(payload.get("auto_idle", False))
     data = base64.b64decode(png_b64)
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         f.write(data)
@@ -184,13 +351,13 @@ def display_raw(payload: dict) -> dict[str, str]:
 def display_text(payload: dict) -> dict[str, str]:
     """Render text to a 128x64 framebuffer and push it. Uses PIL.
 
-    Body: {"text": "Hello", "font_size": 16, "hold_seconds": 2.0, "auto_idle": true}
+    Body: {"text": "Hello", "font_size": 16, "hold_seconds": 2.0, "auto_idle": false}
     """
     text = payload.get("text", "")
     font_size = int(payload.get("font_size", 16))
     invert = bool(payload.get("invert", True))
     hold_seconds = float(payload.get("hold_seconds", 2.0))
-    auto_idle = bool(payload.get("auto_idle", True))
+    auto_idle = bool(payload.get("auto_idle", False))
     try:
         from PIL import Image, ImageDraw, ImageFont
     except ImportError:
@@ -215,6 +382,125 @@ def display_text(payload: dict) -> dict[str, str]:
     finally:
         tmp.unlink(missing_ok=True)
     return {"status": "ok" if ok else "error", "acked": "true" if ok else "false", "text": text}
+
+
+def _display_text_arms(payload: dict) -> dict[str, object]:
+    """Show text while moving both arms up/down in one on-demand session."""
+    text = str(payload.get("text", "Hello Alice!!"))
+    duration = max(0.1, min(_float(payload, "duration_seconds", 5.0), 30.0))
+    font_size = _int(payload, "font_size", 16)
+    invert = _bool(payload, "invert", True)
+    threshold = _int(payload, "threshold", 128)
+    cleanup = str(payload.get("cleanup", "disconnect_only"))
+    pause = max(0.0, min(_float(payload, "step_pause_seconds", 0.05), 1.0))
+    allowed_cleanup = {"disconnect_only", "arms_down", "arms_rest", "reset_pose", "idle_face"}
+    if cleanup not in allowed_cleanup:
+        raise HTTPException(status_code=400, detail=f"cleanup must be one of {sorted(allowed_cleanup)}")
+
+    def run(robot: EilikController) -> dict[str, object]:
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+        except ImportError as exc:
+            raise HTTPException(status_code=500, detail="Pillow not installed") from exc
+
+        img = Image.new("L", (128, 64), 255 if invert else 0)
+        draw = ImageDraw.Draw(img)
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+        except (OSError, IOError):
+            font = ImageFont.load_default()
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        x = max(0, (128 - tw) // 2 - bbox[0])
+        y = max(0, (64 - th) // 2 - bbox[1])
+        draw.text((x, y), text, fill=(0 if invert else 255), font=font)
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            tmp = Path(f.name)
+            img.save(f, "PNG")
+
+        started = time.monotonic()
+        arm_steps = 0
+        try:
+            robot.logger.info(
+                "ROUTINE_DISPLAY_TEXT_ARMS_START text=%r duration=%s cleanup=%s",
+                text,
+                duration,
+                cleanup,
+            )
+            ok = robot.display_image(
+                tmp,
+                invert=False,
+                threshold=threshold,
+                hold_seconds=0,
+                auto_idle=False,
+            )
+            deadline = time.monotonic() + duration
+            while time.monotonic() < deadline:
+                robot.move_motor(MOTOR_RIGHT_ARM, 500)
+                robot.move_motor(MOTOR_LEFT_ARM, 2500)
+                arm_steps += 2
+                if pause:
+                    time.sleep(pause)
+                if time.monotonic() >= deadline:
+                    break
+                robot.move_motor(MOTOR_RIGHT_ARM, 2500)
+                robot.move_motor(MOTOR_LEFT_ARM, 500)
+                arm_steps += 2
+                if pause:
+                    time.sleep(pause)
+
+            if cleanup == "arms_down":
+                robot.move_motor(MOTOR_RIGHT_ARM, 2500)
+                robot.move_motor(MOTOR_LEFT_ARM, 500)
+            elif cleanup == "arms_rest":
+                robot.move_motor(MOTOR_RIGHT_ARM, REST_POSITION)
+                robot.move_motor(MOTOR_LEFT_ARM, REST_POSITION)
+            elif cleanup == "reset_pose":
+                robot.reset_pose()
+            elif cleanup == "idle_face":
+                robot.restore_idle_face(auto_rotate=True)
+
+            elapsed = round(time.monotonic() - started, 3)
+            robot.logger.info(
+                "ROUTINE_DISPLAY_TEXT_ARMS_END text=%r ok=%s arm_steps=%s elapsed=%s cleanup=%s",
+                text,
+                ok,
+                arm_steps,
+                elapsed,
+                cleanup,
+            )
+            return {
+                "status": "ok" if ok else "error",
+                "text": text,
+                "duration_seconds": duration,
+                "elapsed_seconds": elapsed,
+                "arm_steps": arm_steps,
+                "cleanup": cleanup,
+            }
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    return controller.run("routine.display_text_arms", run)
+
+
+@app.post("/routine/display_text_arms")
+def routine_display_text_arms(payload: dict) -> dict[str, object]:
+    """Show text while moving both arms up/down in one on-demand serial session.
+
+    Body: {
+      "text": "Hello Alice!!",
+      "duration_seconds": 5,
+      "cleanup": "disconnect_only" | "arms_down" | "arms_rest" | "reset_pose" | "idle_face"
+    }
+    """
+    return _display_text_arms(payload)
+
+
+@app.post("/test/display-text-arms")
+def test_display_text_arms(payload: dict) -> dict[str, object]:
+    """Backward-friendly alias for curl tests."""
+    return _display_text_arms(payload)
 
 
 @app.post("/action")
