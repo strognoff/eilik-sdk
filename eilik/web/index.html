@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Eilik Control</title>
+    <link rel="stylesheet" href="/app/assets/styles.css" />
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+    <script src="/app/assets/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Eilik Control</h1>
+        <p id="statusLine">Checking API...</p>
+      </div>
+      <div class="top-actions">
+        <button class="icon-button" id="refreshStatus" title="Refresh status">
+          <i data-lucide="refresh-cw"></i>
+          <span>Refresh</span>
+        </button>
+        <a class="icon-button" href="/docs" target="_blank" rel="noreferrer" title="Open API docs">
+          <i data-lucide="book-open"></i>
+          <span>API Docs</span>
+        </a>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel display-panel">
+        <div class="panel-heading">
+          <h2>Screen</h2>
+          <span class="meta">128x64 display</span>
+        </div>
+        <label class="field wide">
+          <span>Message</span>
+          <textarea id="messageText" rows="3" maxlength="80">Hello Alice!!</textarea>
+        </label>
+        <div class="controls-grid">
+          <label class="field">
+            <span>Hold seconds</span>
+            <input id="holdSeconds" type="number" min="0" max="30" step="0.5" value="5" />
+          </label>
+          <label class="field">
+            <span>Font size</span>
+            <input id="fontSize" type="number" min="8" max="28" step="1" value="16" />
+          </label>
+          <label class="field checkbox-field">
+            <input id="autoIdle" type="checkbox" />
+            <span>Auto idle face</span>
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="sendText" class="primary">
+            <i data-lucide="send"></i>
+            <span>Send Text</span>
+          </button>
+          <button id="textArms">
+            <i data-lucide="activity"></i>
+            <span>Text + Arms</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel routine-panel">
+        <div class="panel-heading">
+          <h2>Routine</h2>
+          <span class="meta">Single API session</span>
+        </div>
+        <div class="controls-grid">
+          <label class="field">
+            <span>Duration</span>
+            <input id="routineDuration" type="number" min="0.5" max="30" step="0.5" value="5" />
+          </label>
+          <label class="field">
+            <span>Cleanup</span>
+            <select id="cleanupMode">
+              <option value="disconnect_only">Disconnect only</option>
+              <option value="arms_down">Arms down</option>
+              <option value="arms_rest">Arms rest</option>
+              <option value="reset_pose">Reset pose</option>
+              <option value="idle_face">Idle face</option>
+            </select>
+          </label>
+        </div>
+        <div class="button-row compact">
+          <button data-motion="reset_pose">
+            <i data-lucide="rotate-ccw"></i>
+            <span>Reset Pose</span>
+          </button>
+          <button data-motion="wiggle">
+            <i data-lucide="waves"></i>
+            <span>Wiggle</span>
+          </button>
+          <button data-motion="wave">
+            <i data-lucide="hand"></i>
+            <span>Wave</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel motions-panel">
+        <div class="panel-heading">
+          <h2>Movements</h2>
+          <span class="meta" id="motionCount">Loading</span>
+        </div>
+        <div id="motionButtons" class="motion-grid"></div>
+      </section>
+
+      <section class="panel servo-panel">
+        <div class="panel-heading">
+          <h2>Servos</h2>
+          <span class="meta">Direct motor control</span>
+        </div>
+        <div id="servoControls" class="servo-stack"></div>
+        <div class="button-row">
+          <button id="readAngles">
+            <i data-lucide="gauge"></i>
+            <span>Read Angles</span>
+          </button>
+        </div>
+        <pre id="angleReadout" class="readout">No servo read yet.</pre>
+      </section>
+
+      <section class="panel log-panel">
+        <div class="panel-heading">
+          <h2>Logs</h2>
+          <span class="meta">Recent API + packets</span>
+        </div>
+        <div class="button-row">
+          <button id="refreshLogs">
+            <i data-lucide="list-restart"></i>
+            <span>Refresh Logs</span>
+          </button>
+          <button id="clearOutput">
+            <i data-lucide="eraser"></i>
+            <span>Clear Output</span>
+          </button>
+        </div>
+        <pre id="logs" class="logbox">No logs loaded.</pre>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="panel-heading">
+          <h2>Output</h2>
+          <span class="meta" id="lastAction">Idle</span>
+        </div>
+        <pre id="output" class="outputbox">Ready.</pre>
+      </section>
+    </main>
+  </body>
+</html>

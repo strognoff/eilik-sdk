@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Callable, TypeVar
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .controller import EilikController
 from .logger import setup_logger
@@ -32,6 +33,7 @@ LOG_PATH = os.getenv("EILIK_LOG_PATH", "logs/eilik.log")
 SERVICE_LOGGER = setup_logger(LOG_PATH)
 app = FastAPI(title="Eilik Controller Service", version="0.1.0")
 T = TypeVar("T")
+WEB_DIR = Path(__file__).resolve().parent / "web"
 
 MOTOR_NAMES = {
     "right_arm": MOTOR_RIGHT_ARM,
@@ -148,6 +150,11 @@ def _tail(path: Path, line_count: int) -> list[str]:
 @app.get("/")
 def root() -> dict[str, str]:
     return {"service": "eilik", "status": "ok"}
+
+
+@app.get("/app", include_in_schema=False)
+def web_app() -> FileResponse:
+    return FileResponse(WEB_DIR / "index.html")
 
 
 @app.get("/health")
@@ -767,3 +774,7 @@ def choreography(payload: dict) -> dict[str, str]:
 def servo_angles() -> dict[str, object]:
     angles = controller.read_servo_angles()
     return {"angles": angles, "count": len(angles)}
+
+
+if WEB_DIR.exists():
+    app.mount("/app/assets", StaticFiles(directory=WEB_DIR), name="eilik_web")

@@ -26,6 +26,9 @@ eilik = "eilik.cli:main"
 [tool.setuptools.packages.find]
 include = ["eilik*"]
 
+[tool.setuptools.package-data]
+eilik = ["web/*.html", "web/*.css", "web/*.js"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

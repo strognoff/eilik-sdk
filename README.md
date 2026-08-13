@@ -134,6 +134,25 @@ Live OpenAPI endpoints while the service is running:
 - `GET http://127.0.0.1:8765/openapi.json`
 - `GET http://127.0.0.1:8765/docs`
 
+### Webapp
+
+The same service also serves a local control webapp:
+
+- `GET http://127.0.0.1:8765/app`
+
+It calls the API endpoints directly and includes:
+
+- API status and docs links
+- Text-to-screen controls
+- Text plus both-arms routine controls
+- Motion buttons for every known movement
+- Direct servo sliders for right arm, left arm, torso, and head
+- Recent log viewer backed by `/logs/recent`
+- JSON output for every API response/error
+
+The webapp does not run any Eilik action on load. It only calls read-only
+service endpoints until a button is pressed.
+
 ### Motion endpoints
 
 - `GET /`

@@ -28,6 +28,24 @@ curl "$EILIK_URL/openapi.json"
 
 A generated copy is checked in at [openapi.json](openapi.json).
 
+## Webapp
+
+Open the local control webapp:
+
+```bash
+xdg-open "$EILIK_URL/app"
+```
+
+Or browse to:
+
+```text
+http://127.0.0.1:8765/app
+```
+
+The webapp calls this API directly. Loading it is read-only: it checks health,
+loads available motions, and reads recent logs. Eilik only moves or changes
+screen when a command button is pressed.
+
 ## Display
 
 Show text for 5 seconds without hidden cleanup:
@@ -227,4 +245,3 @@ curl -X POST "$EILIK_URL/routine/display_text_arms" \
 
 curl "$EILIK_URL/logs/recent?lines=120"
 ```
-
