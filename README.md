@@ -178,6 +178,10 @@ service endpoints until a button is pressed.
 - `POST /servo/move` — direct motor position, e.g. `{"motor": "right_arm", "position": 500}`
 - `GET /servo/angles` — read live servo positions
 
+Named motions and direct servo moves use the canonical `cmd=0xA2` packet path.
+That is the same packet family used by `/servo/move`; the older token-framed
+servo packets are retained only as protocol reference material.
+
 ### Display endpoints
 
 - `POST /display/image` — push a PNG (base64-encoded) to Eilik's screen

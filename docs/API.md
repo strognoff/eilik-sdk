@@ -102,6 +102,9 @@ curl -X POST "$EILIK_URL/motion/wiggle"
 curl -X POST "$EILIK_URL/motion/reset_pose"
 ```
 
+Named motions use the canonical direct servo packet path (`cmd=0xA2`), the same
+path as `/servo/move`.
+
 Shortcut endpoints:
 
 ```bash

@@ -29,7 +29,6 @@ from .protocol import (
     REST_POSITION,
     SERIAL_TIMEOUT_SECONDS,
     ServoCommand,
-    build_servo_frame,
     extract_session_token,
     has_command_reply,
 )
@@ -193,22 +192,7 @@ class EilikController:
         `position` is a 16-bit value (typical range 0..3000).
         """
         self._ensure_connected()
-        assert self._serial is not None
-        frame = _write_servo_packet([(motor_id, position)])
-        with self._lock:
-            self._write_raw(frame, f"TX_SERVO_DIRECT motor={motor_id} pos={position}")
-            time.sleep(0.1)
-            # drain any ACK
-            buf = b''
-            deadline = time.monotonic() + 0.5
-            while time.monotonic() < deadline:
-                n = self._serial.in_waiting
-                if n:
-                    buf += self._serial.read(n)
-                else:
-                    time.sleep(0.02)
-        if buf:
-            self.logger.info("RX_SERVO_DIRECT %s", hex_bytes(buf))
+        self._send_direct_servo(motor_id, position)
 
     def read_servo_angles(self) -> List[int]:
         """Send `cmd=0xA1` and decode the 4 servo angles (positions 0..3000)."""
@@ -987,16 +971,34 @@ class EilikController:
 
     def _send_servo(self, motor_id: int, position: int) -> None:
         self._ensure_connected()
-        if not self._session_token:
-            raise EilikConnectionError(
-                "This robot answered the captured official status protocol, but no servo/motion "
-                "command was present in the capture. Capture a RobotStudio/app movement to map motion commands."
-            )
-        frame = build_servo_frame(self._session_token, motor_id, position)
+        self._send_direct_servo(motor_id, position)
+
+    def _send_direct_servo(self, motor_id: int, position: int) -> None:
+        """Send one canonical `cmd=0xA2` servo packet.
+
+        The legacy token servo frame can put Eilik into the turquoise USB
+        control/status screen without producing physical movement on current
+        firmware. The canonical PackAnalyData path is what direct `/servo/move`
+        uses and is the movement path we have live-tested successfully.
+        """
+        self._ensure_connected()
+        frame = _write_servo_packet([(motor_id, position)])
         for attempt in range(self.reconnect_attempts + 1):
             try:
+                buf = b""
                 with self._lock:
-                    self._write_raw(frame, f"TX_SERVO motor={motor_id} position={position}")
+                    assert self._serial is not None
+                    self._write_raw(frame, f"TX_SERVO_DIRECT motor={motor_id} pos={position}")
+                    time.sleep(0.08)
+                    deadline = time.monotonic() + 0.12
+                    while time.monotonic() < deadline:
+                        n = self._serial.in_waiting
+                        if n:
+                            buf += self._serial.read(n)
+                        else:
+                            time.sleep(0.01)
+                if buf:
+                    self.logger.info("RX_SERVO_DIRECT %s", hex_bytes(buf))
                 return
             except Exception:
                 self.logger.exception("TX_ERROR motor=%s position=%s attempt=%s", motor_id, position, attempt + 1)
