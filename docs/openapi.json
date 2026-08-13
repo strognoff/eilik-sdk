@@ -1,1806 +1,1849 @@
 {
-    "openapi": "3.1.0",
-    "info": {
-        "title": "Eilik Controller Service",
-        "version": "0.1.0"
-    },
-    "paths": {
-        "/": {
-            "get": {
-                "summary": "Root",
-                "operationId": "root__get",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Root  Get"
-                                }
-                            }
-                        }
-                    }
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Eilik Controller Service",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Root  Get"
                 }
+              }
             }
-        },
-        "/health": {
-            "get": {
-                "summary": "Health",
-                "operationId": "health_health_get",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Health Health Get"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/status": {
-            "get": {
-                "summary": "Status",
-                "operationId": "status_status_get",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Status Status Get"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/logs/recent": {
-            "get": {
-                "summary": "Recent Logs",
-                "description": "Return recent bounded API/packet log lines for inspection.",
-                "operationId": "recent_logs_logs_recent_get",
-                "parameters": [
-                    {
-                        "name": "lines",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "integer",
-                            "default": 120,
-                            "title": "Lines"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "additionalProperties": true,
-                                    "title": "Response Recent Logs Logs Recent Get"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/diagnostic/snapshot": {
-            "get": {
-                "summary": "Diagnostic Snapshot",
-                "description": "Read live state back from Eilik for debugging.",
-                "operationId": "diagnostic_snapshot_diagnostic_snapshot_get",
-                "parameters": [
-                    {
-                        "name": "include_display",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean",
-                            "default": false,
-                            "title": "Include Display"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "additionalProperties": true,
-                                    "title": "Response Diagnostic Snapshot Diagnostic Snapshot Get"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/diagnostic/motion": {
-            "post": {
-                "summary": "Diagnostic Motion",
-                "description": "Move one motor, verify readback changed, then restore rest.",
-                "operationId": "diagnostic_motion_diagnostic_motion_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "anyOf": [
-                                    {
-                                        "additionalProperties": true,
-                                        "type": "object"
-                                    },
-                                    {
-                                        "type": "null"
-                                    }
-                                ],
-                                "title": "Payload"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Diagnostic Motion Diagnostic Motion Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/wave": {
-            "post": {
-                "summary": "Wave",
-                "operationId": "wave_wave_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Wave Wave Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/nod": {
-            "post": {
-                "summary": "Nod",
-                "operationId": "nod_nod_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Nod Nod Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/shake_head": {
-            "post": {
-                "summary": "Shake Head",
-                "operationId": "shake_head_shake_head_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Shake Head Shake Head Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/look_left": {
-            "post": {
-                "summary": "Look Left",
-                "operationId": "look_left_look_left_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Look Left Look Left Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/look_right": {
-            "post": {
-                "summary": "Look Right",
-                "operationId": "look_right_look_right_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Look Right Look Right Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/left_arm_up": {
-            "post": {
-                "summary": "Left Arm Up",
-                "operationId": "left_arm_up_left_arm_up_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Left Arm Up Left Arm Up Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/left_arm_down": {
-            "post": {
-                "summary": "Left Arm Down",
-                "operationId": "left_arm_down_left_arm_down_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Left Arm Down Left Arm Down Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/right_arm_up": {
-            "post": {
-                "summary": "Right Arm Up",
-                "operationId": "right_arm_up_right_arm_up_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Right Arm Up Right Arm Up Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/right_arm_down": {
-            "post": {
-                "summary": "Right Arm Down",
-                "operationId": "right_arm_down_right_arm_down_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Right Arm Down Right Arm Down Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/reset": {
-            "post": {
-                "summary": "Reset",
-                "operationId": "reset_reset_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Reset Reset Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/motions": {
-            "get": {
-                "summary": "List Motions",
-                "operationId": "list_motions_motions_get",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response List Motions Motions Get"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/motion/{name}": {
-            "post": {
-                "summary": "Run Motion",
-                "operationId": "run_motion_motion__name__post",
-                "parameters": [
-                    {
-                        "name": "name",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "title": "Name"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "title": "Response Run Motion Motion  Name  Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/servo/move": {
-            "post": {
-                "summary": "Servo Move",
-                "description": "Move one motor directly.\n\nBody: {\"motor\": \"right_arm\" | 1, \"position\": 500}",
-                "operationId": "servo_move_servo_move_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Servo Move Servo Move Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/display/release": {
-            "post": {
-                "summary": "Display Release",
-                "description": "Release user-display mode so Eilik's firmware can resume its own face loop.",
-                "operationId": "display_release_display_release_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Display Release Display Release Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/display/idle": {
-            "post": {
-                "summary": "Display Idle",
-                "description": "Restore the known calm idle face.",
-                "operationId": "display_idle_display_idle_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Display Idle Display Idle Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/display/image": {
-            "post": {
-                "summary": "Display Image",
-                "description": "Push a PNG (base64-encoded) to Eilik's screen.\n\nBody: {\"png_b64\": \"...\", \"invert\": false, \"threshold\": 128, \"hold_seconds\": 2.0, \"auto_idle\": false}",
-                "operationId": "display_image_display_image_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Display Image Display Image Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/display/raw": {
-            "post": {
-                "summary": "Display Raw",
-                "description": "Push a raw 1024-byte framebuffer to Eilik's screen.\n\nBody: {\"framebuffer_hex\": \"00ff...\"} (2048 hex chars)",
-                "operationId": "display_raw_display_raw_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Display Raw Display Raw Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/display/text": {
-            "post": {
-                "summary": "Display Text",
-                "description": "Render text to a 128x64 framebuffer and push it. Uses PIL.\n\nBody: {\"text\": \"Hello\", \"font_size\": 16, \"hold_seconds\": 2.0, \"auto_idle\": false}",
-                "operationId": "display_text_display_text_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Display Text Display Text Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/routine/display_text_arms": {
-            "post": {
-                "summary": "Routine Display Text Arms",
-                "description": "Show text while moving both arms up/down in one on-demand serial session.\n\nBody: {\n  \"text\": \"Hello Alice!!\",\n  \"duration_seconds\": 5,\n  \"cleanup\": \"disconnect_only\" | \"arms_down\" | \"arms_rest\" | \"reset_pose\" | \"idle_face\"\n}",
-                "operationId": "routine_display_text_arms_routine_display_text_arms_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Routine Display Text Arms Routine Display Text Arms Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/test/display-text-arms": {
-            "post": {
-                "summary": "Test Display Text Arms",
-                "description": "Backward-friendly alias for curl tests.",
-                "operationId": "test_display_text_arms_test_display_text_arms_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Test Display Text Arms Test Display Text Arms Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/action": {
-            "post": {
-                "summary": "Action",
-                "description": "Run a high-level action from the actions library.\n\nBody: {\"name\": \"message\", \"hold_seconds\": null, \"auto_idle\": true}",
-                "operationId": "action_action_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/actions": {
-            "get": {
-                "summary": "List Actions",
-                "description": "List all known high-level actions.",
-                "operationId": "list_actions_actions_get",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response List Actions Actions Get"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/ambient/clock": {
-            "post": {
-                "summary": "Ambient Clock",
-                "description": "Show a clock face.\n\nBody: {\"hour\": null, \"minute\": null, \"hold_seconds\": 3.0, \"auto_idle\": true}",
-                "operationId": "ambient_clock_ambient_clock_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Ambient Clock Ambient Clock Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/ambient/streak": {
-            "post": {
-                "summary": "Ambient Streak",
-                "description": "Show a habit-streak face.\n\nBody: {\"days\": 7, \"hold_seconds\": 3.0, \"auto_idle\": true}",
-                "operationId": "ambient_streak_ambient_streak_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Ambient Streak Ambient Streak Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/ambient/weather": {
-            "post": {
-                "summary": "Ambient Weather",
-                "description": "Show a weather face.\n\nBody: {\"condition\": \"sun\", \"hold_seconds\": 3.0, \"auto_idle\": true}",
-                "operationId": "ambient_weather_ambient_weather_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Ambient Weather Ambient Weather Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/ambient/pr": {
-            "post": {
-                "summary": "Ambient Pr",
-                "description": "Show a PR notification face.\n\nBody: {\"pr_number\": 42, \"author\": \"jeff\", \"hold_seconds\": 3.0, \"auto_idle\": true}",
-                "operationId": "ambient_pr_ambient_pr_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Ambient Pr Ambient Pr Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/ambient/calendar": {
-            "post": {
-                "summary": "Ambient Calendar",
-                "description": "Show a calendar-nudge face.\n\nBody: {\"minutes_until\": 5, \"meeting_title\": \"Catchup\", \"hold_seconds\": 3.0, \"auto_idle\": true}",
-                "operationId": "ambient_calendar_ambient_calendar_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Ambient Calendar Ambient Calendar Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/ambient/energy": {
-            "post": {
-                "summary": "Ambient Energy",
-                "description": "Show an energy-meter face.\n\nBody: {\"soi_percent\": 87, \"hold_seconds\": 3.0, \"auto_idle\": true}",
-                "operationId": "ambient_energy_ambient_energy_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Ambient Energy Ambient Energy Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/ambient/crypto": {
-            "post": {
-                "summary": "Ambient Crypto",
-                "description": "Show a crypto ticker face.\n\nBody: {\"ticker\": \"BTC\", \"change_pct\": 5.2, \"hold_seconds\": 3.0, \"auto_idle\": true}",
-                "operationId": "ambient_crypto_ambient_crypto_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Ambient Crypto Ambient Crypto Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/ambient/tts": {
-            "post": {
-                "summary": "Ambient Tts",
-                "description": "Show a TTS-style longer text face.\n\nBody: {\"text\": \"hello world\", \"hold_seconds\": 4.0, \"auto_idle\": true}",
-                "operationId": "ambient_tts_ambient_tts_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Ambient Tts Ambient Tts Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/ambient/mood": {
-            "post": {
-                "summary": "Ambient Mood",
-                "description": "Show a mood face.\n\nBody: {\"mood\": \"happy\", \"hold_seconds\": 3.0, \"auto_idle\": true}",
-                "operationId": "ambient_mood_ambient_mood_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Ambient Mood Ambient Mood Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/morning": {
-            "post": {
-                "summary": "Morning Routine",
-                "operationId": "morning_routine_morning_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Morning Routine Morning Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/welcome": {
-            "post": {
-                "summary": "Welcome Back",
-                "operationId": "welcome_back_welcome_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Welcome Back Welcome Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/event/cron_done": {
-            "post": {
-                "summary": "Event Cron Done",
-                "operationId": "event_cron_done_event_cron_done_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Event Cron Done Event Cron Done Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/event/error": {
-            "post": {
-                "summary": "Event Error",
-                "operationId": "event_error_event_error_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Event Error Event Error Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/event/subagent_returned": {
-            "post": {
-                "summary": "Event Subagent Done",
-                "operationId": "event_subagent_done_event_subagent_returned_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Event Subagent Done Event Subagent Returned Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/event/email": {
-            "post": {
-                "summary": "Event Email",
-                "operationId": "event_email_event_email_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Event Email Event Email Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/event/quinn": {
-            "post": {
-                "summary": "Event Quinn",
-                "operationId": "event_quinn_event_quinn_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Event Quinn Event Quinn Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/event/crypto_pumped": {
-            "post": {
-                "summary": "Event Crypto",
-                "operationId": "event_crypto_event_crypto_pumped_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {}
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/event/pr_alert": {
-            "post": {
-                "summary": "Event Pr Alert",
-                "description": "A new PR opened \u2014 heart hands + PR! face for 10s.",
-                "operationId": "event_pr_alert_event_pr_alert_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Event Pr Alert Event Pr Alert Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/event/welcome_back": {
-            "post": {
-                "summary": "Event Welcome Back",
-                "description": "Jeff opened chat after >2h silence.",
-                "operationId": "event_welcome_back_event_welcome_back_post",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Event Welcome Back Event Welcome Back Post"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/celebrate": {
-            "post": {
-                "summary": "Celebrate",
-                "description": "Celebrate a win: wiggle + heart hands + bright face for 10s.\n\nBody: {\"label\": \"PR#104\"} (optional text shown with the celebration).",
-                "operationId": "celebrate_celebrate_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Celebrate Celebrate Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/apology": {
-            "post": {
-                "summary": "Apology",
-                "description": "Apologize for a failure: shake head + shrug + sad face for 10s.\n\nBody: {\"reason\": \"timeout\"} (optional reason shown with the apology).",
-                "operationId": "apology_apology_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Apology Apology Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/choreo": {
-            "post": {
-                "summary": "Choreography",
-                "description": "Run a sequence of actions. Body: {\"steps\": [{\"action\": \"hi_jeff\"}, {\"wait\": 1}]}",
-                "operationId": "choreography_choreo_post",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "additionalProperties": true,
-                                "type": "object",
-                                "title": "Payload"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": {
-                                        "type": "string"
-                                    },
-                                    "type": "object",
-                                    "title": "Response Choreography Choreo Post"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/HTTPValidationError"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/servo/angles": {
-            "get": {
-                "summary": "Servo Angles",
-                "operationId": "servo_angles_servo_angles_get",
-                "responses": {
-                    "200": {
-                        "description": "Successful Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "additionalProperties": true,
-                                    "type": "object",
-                                    "title": "Response Servo Angles Servo Angles Get"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+          }
         }
+      }
     },
-    "components": {
-        "schemas": {
-            "HTTPValidationError": {
-                "properties": {
-                    "detail": {
-                        "items": {
-                            "$ref": "#/components/schemas/ValidationError"
-                        },
-                        "type": "array",
-                        "title": "Detail"
-                    }
-                },
-                "type": "object",
-                "title": "HTTPValidationError"
-            },
-            "ValidationError": {
-                "properties": {
-                    "loc": {
-                        "items": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "integer"
-                                }
-                            ]
-                        },
-                        "type": "array",
-                        "title": "Location"
-                    },
-                    "msg": {
-                        "type": "string",
-                        "title": "Message"
-                    },
-                    "type": {
-                        "type": "string",
-                        "title": "Error Type"
-                    },
-                    "input": {
-                        "title": "Input"
-                    },
-                    "ctx": {
-                        "type": "object",
-                        "title": "Context"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "loc",
-                    "msg",
-                    "type"
-                ],
-                "title": "ValidationError"
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
             }
+          }
         }
+      }
+    },
+    "/status": {
+      "get": {
+        "summary": "Status",
+        "operationId": "status_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Status Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs/recent": {
+      "get": {
+        "summary": "Recent Logs",
+        "description": "Return recent bounded API/packet log lines for inspection.",
+        "operationId": "recent_logs_logs_recent_get",
+        "parameters": [
+          {
+            "name": "lines",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 120,
+              "title": "Lines"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Recent Logs Logs Recent Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/diagnostic/snapshot": {
+      "get": {
+        "summary": "Diagnostic Snapshot",
+        "description": "Read live state back from Eilik for debugging.",
+        "operationId": "diagnostic_snapshot_diagnostic_snapshot_get",
+        "parameters": [
+          {
+            "name": "include_display",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Display"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Diagnostic Snapshot Diagnostic Snapshot Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/diagnostic/motion": {
+      "post": {
+        "summary": "Diagnostic Motion",
+        "description": "Move one motor, verify readback changed, then restore rest.",
+        "operationId": "diagnostic_motion_diagnostic_motion_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Diagnostic Motion Diagnostic Motion Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wave": {
+      "post": {
+        "summary": "Wave",
+        "operationId": "wave_wave_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Wave Wave Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nod": {
+      "post": {
+        "summary": "Nod",
+        "operationId": "nod_nod_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Nod Nod Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shake_head": {
+      "post": {
+        "summary": "Shake Head",
+        "operationId": "shake_head_shake_head_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Shake Head Shake Head Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/look_left": {
+      "post": {
+        "summary": "Look Left",
+        "operationId": "look_left_look_left_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Look Left Look Left Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/look_right": {
+      "post": {
+        "summary": "Look Right",
+        "operationId": "look_right_look_right_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Look Right Look Right Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/left_arm_up": {
+      "post": {
+        "summary": "Left Arm Up",
+        "operationId": "left_arm_up_left_arm_up_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Left Arm Up Left Arm Up Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/left_arm_down": {
+      "post": {
+        "summary": "Left Arm Down",
+        "operationId": "left_arm_down_left_arm_down_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Left Arm Down Left Arm Down Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/right_arm_up": {
+      "post": {
+        "summary": "Right Arm Up",
+        "operationId": "right_arm_up_right_arm_up_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Right Arm Up Right Arm Up Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/right_arm_down": {
+      "post": {
+        "summary": "Right Arm Down",
+        "operationId": "right_arm_down_right_arm_down_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Right Arm Down Right Arm Down Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reset": {
+      "post": {
+        "summary": "Reset",
+        "operationId": "reset_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Reset Reset Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/motions": {
+      "get": {
+        "summary": "List Motions",
+        "operationId": "list_motions_motions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Motions Motions Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/motion/{name}": {
+      "post": {
+        "summary": "Run Motion",
+        "operationId": "run_motion_motion__name__post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Run Motion Motion  Name  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/servo/move": {
+      "post": {
+        "summary": "Servo Move",
+        "description": "Move one motor directly.\n\nBody: {\"motor\": \"right_arm\" | 1, \"position\": 500}",
+        "operationId": "servo_move_servo_move_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Servo Move Servo Move Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/display/release": {
+      "post": {
+        "summary": "Display Release",
+        "description": "Release user-display mode so Eilik's firmware can resume its own face loop.",
+        "operationId": "display_release_display_release_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Display Release Display Release Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/display/idle": {
+      "post": {
+        "summary": "Display Idle",
+        "description": "Restore the known calm idle face.",
+        "operationId": "display_idle_display_idle_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Display Idle Display Idle Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/display/image": {
+      "post": {
+        "summary": "Display Image",
+        "description": "Push a PNG (base64-encoded) to Eilik's screen.\n\nBody: {\"png_b64\": \"...\", \"invert\": false, \"threshold\": 128, \"hold_seconds\": 2.0, \"auto_idle\": false}",
+        "operationId": "display_image_display_image_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Display Image Display Image Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/display/raw": {
+      "post": {
+        "summary": "Display Raw",
+        "description": "Push a raw 1024-byte framebuffer to Eilik's screen.\n\nBody: {\"framebuffer_hex\": \"00ff...\"} (2048 hex chars)",
+        "operationId": "display_raw_display_raw_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Display Raw Display Raw Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/display/text": {
+      "post": {
+        "summary": "Display Text",
+        "description": "Render text to a 128x64 framebuffer and push it. Uses PIL.\n\nBody: {\"text\": \"Hello\", \"font_size\": 16, \"hold_seconds\": 2.0, \"auto_idle\": false}",
+        "operationId": "display_text_display_text_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Display Text Display Text Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/routine/display_text_arms": {
+      "post": {
+        "summary": "Routine Display Text Arms",
+        "description": "Show text while moving both arms up/down in one on-demand serial session.\n\nBody: {\n  \"text\": \"Hello Alice!!\",\n  \"duration_seconds\": 5,\n  \"cleanup\": \"disconnect_only\" | \"arms_down\" | \"arms_rest\" | \"reset_pose\" | \"idle_face\"\n}",
+        "operationId": "routine_display_text_arms_routine_display_text_arms_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Routine Display Text Arms Routine Display Text Arms Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test/display-text-arms": {
+      "post": {
+        "summary": "Test Display Text Arms",
+        "description": "Backward-friendly alias for curl tests.",
+        "operationId": "test_display_text_arms_test_display_text_arms_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Test Display Text Arms Test Display Text Arms Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/routine/sequence": {
+      "post": {
+        "summary": "Routine Sequence",
+        "description": "Run an ordered kids-game sequence in one on-demand serial session.\n\nBody: {\n  \"steps\": [\n    {\"type\": \"display_text\", \"text\": \"Hello\", \"hold_seconds\": 1.5},\n    {\"type\": \"motion\", \"motion\": \"wave\"},\n    {\"type\": \"wait\", \"seconds\": 0.5}\n  ],\n  \"cleanup\": \"disconnect_only\" | \"arms_down\" | \"arms_rest\" | \"reset_pose\" | \"idle_face\"\n}",
+        "operationId": "routine_sequence_routine_sequence_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Routine Sequence Routine Sequence Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/action": {
+      "post": {
+        "summary": "Action",
+        "description": "Run a high-level action from the actions library.\n\nBody: {\"name\": \"message\", \"hold_seconds\": null, \"auto_idle\": true}",
+        "operationId": "action_action_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actions": {
+      "get": {
+        "summary": "List Actions",
+        "description": "List all known high-level actions.",
+        "operationId": "list_actions_actions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Actions Actions Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambient/clock": {
+      "post": {
+        "summary": "Ambient Clock",
+        "description": "Show a clock face.\n\nBody: {\"hour\": null, \"minute\": null, \"hold_seconds\": 3.0, \"auto_idle\": true}",
+        "operationId": "ambient_clock_ambient_clock_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ambient Clock Ambient Clock Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambient/streak": {
+      "post": {
+        "summary": "Ambient Streak",
+        "description": "Show a habit-streak face.\n\nBody: {\"days\": 7, \"hold_seconds\": 3.0, \"auto_idle\": true}",
+        "operationId": "ambient_streak_ambient_streak_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ambient Streak Ambient Streak Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambient/weather": {
+      "post": {
+        "summary": "Ambient Weather",
+        "description": "Show a weather face.\n\nBody: {\"condition\": \"sun\", \"hold_seconds\": 3.0, \"auto_idle\": true}",
+        "operationId": "ambient_weather_ambient_weather_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ambient Weather Ambient Weather Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambient/pr": {
+      "post": {
+        "summary": "Ambient Pr",
+        "description": "Show a PR notification face.\n\nBody: {\"pr_number\": 42, \"author\": \"jeff\", \"hold_seconds\": 3.0, \"auto_idle\": true}",
+        "operationId": "ambient_pr_ambient_pr_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ambient Pr Ambient Pr Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambient/calendar": {
+      "post": {
+        "summary": "Ambient Calendar",
+        "description": "Show a calendar-nudge face.\n\nBody: {\"minutes_until\": 5, \"meeting_title\": \"Catchup\", \"hold_seconds\": 3.0, \"auto_idle\": true}",
+        "operationId": "ambient_calendar_ambient_calendar_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ambient Calendar Ambient Calendar Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambient/energy": {
+      "post": {
+        "summary": "Ambient Energy",
+        "description": "Show an energy-meter face.\n\nBody: {\"soi_percent\": 87, \"hold_seconds\": 3.0, \"auto_idle\": true}",
+        "operationId": "ambient_energy_ambient_energy_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ambient Energy Ambient Energy Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambient/crypto": {
+      "post": {
+        "summary": "Ambient Crypto",
+        "description": "Show a crypto ticker face.\n\nBody: {\"ticker\": \"BTC\", \"change_pct\": 5.2, \"hold_seconds\": 3.0, \"auto_idle\": true}",
+        "operationId": "ambient_crypto_ambient_crypto_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ambient Crypto Ambient Crypto Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambient/tts": {
+      "post": {
+        "summary": "Ambient Tts",
+        "description": "Show a TTS-style longer text face.\n\nBody: {\"text\": \"hello world\", \"hold_seconds\": 4.0, \"auto_idle\": true}",
+        "operationId": "ambient_tts_ambient_tts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ambient Tts Ambient Tts Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ambient/mood": {
+      "post": {
+        "summary": "Ambient Mood",
+        "description": "Show a mood face.\n\nBody: {\"mood\": \"happy\", \"hold_seconds\": 3.0, \"auto_idle\": true}",
+        "operationId": "ambient_mood_ambient_mood_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ambient Mood Ambient Mood Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/morning": {
+      "post": {
+        "summary": "Morning Routine",
+        "operationId": "morning_routine_morning_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Morning Routine Morning Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/welcome": {
+      "post": {
+        "summary": "Welcome Back",
+        "operationId": "welcome_back_welcome_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Welcome Back Welcome Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/event/cron_done": {
+      "post": {
+        "summary": "Event Cron Done",
+        "operationId": "event_cron_done_event_cron_done_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Event Cron Done Event Cron Done Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/event/error": {
+      "post": {
+        "summary": "Event Error",
+        "operationId": "event_error_event_error_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Event Error Event Error Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/event/subagent_returned": {
+      "post": {
+        "summary": "Event Subagent Done",
+        "operationId": "event_subagent_done_event_subagent_returned_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Event Subagent Done Event Subagent Returned Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/event/email": {
+      "post": {
+        "summary": "Event Email",
+        "operationId": "event_email_event_email_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Event Email Event Email Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/event/quinn": {
+      "post": {
+        "summary": "Event Quinn",
+        "operationId": "event_quinn_event_quinn_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Event Quinn Event Quinn Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/event/crypto_pumped": {
+      "post": {
+        "summary": "Event Crypto",
+        "operationId": "event_crypto_event_crypto_pumped_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/event/pr_alert": {
+      "post": {
+        "summary": "Event Pr Alert",
+        "description": "A new PR opened \u2014 heart hands + PR! face for 10s.",
+        "operationId": "event_pr_alert_event_pr_alert_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Event Pr Alert Event Pr Alert Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/event/welcome_back": {
+      "post": {
+        "summary": "Event Welcome Back",
+        "description": "Jeff opened chat after >2h silence.",
+        "operationId": "event_welcome_back_event_welcome_back_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Event Welcome Back Event Welcome Back Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/celebrate": {
+      "post": {
+        "summary": "Celebrate",
+        "description": "Celebrate a win: wiggle + heart hands + bright face for 10s.\n\nBody: {\"label\": \"PR#104\"} (optional text shown with the celebration).",
+        "operationId": "celebrate_celebrate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Celebrate Celebrate Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apology": {
+      "post": {
+        "summary": "Apology",
+        "description": "Apologize for a failure: shake head + shrug + sad face for 10s.\n\nBody: {\"reason\": \"timeout\"} (optional reason shown with the apology).",
+        "operationId": "apology_apology_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Apology Apology Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/choreo": {
+      "post": {
+        "summary": "Choreography",
+        "description": "Run a sequence of actions. Body: {\"steps\": [{\"action\": \"hi_jeff\"}, {\"wait\": 1}]}",
+        "operationId": "choreography_choreo_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Choreography Choreo Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/servo/angles": {
+      "get": {
+        "summary": "Servo Angles",
+        "operationId": "servo_angles_servo_angles_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Servo Angles Servo Angles Get"
+                }
+              }
+            }
+          }
+        }
+      }
     }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
 }

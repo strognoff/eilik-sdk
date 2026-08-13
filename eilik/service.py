@@ -34,6 +34,7 @@ SERVICE_LOGGER = setup_logger(LOG_PATH)
 app = FastAPI(title="Eilik Controller Service", version="0.1.0")
 T = TypeVar("T")
 WEB_DIR = Path(__file__).resolve().parent / "web"
+ALLOWED_CLEANUP = {"disconnect_only", "arms_down", "arms_rest", "reset_pose", "idle_face"}
 
 MOTOR_NAMES = {
     "right_arm": MOTOR_RIGHT_ARM,
@@ -147,6 +148,81 @@ def _tail(path: Path, line_count: int) -> list[str]:
         return [line.rstrip("\n") for line in deque(fh, maxlen=line_count)]
 
 
+def _apply_cleanup(robot: EilikController, cleanup: str) -> None:
+    if cleanup == "arms_down":
+        robot.move_motor(MOTOR_RIGHT_ARM, 2500)
+        robot.move_motor(MOTOR_LEFT_ARM, 500)
+    elif cleanup == "arms_rest":
+        robot.move_motor(MOTOR_RIGHT_ARM, REST_POSITION)
+        robot.move_motor(MOTOR_LEFT_ARM, REST_POSITION)
+    elif cleanup == "reset_pose":
+        robot.reset_pose()
+    elif cleanup == "idle_face":
+        robot.restore_idle_face(auto_rotate=True)
+
+
+def _render_text_png(text: str, font_size: int = 16, invert: bool = True) -> Path:
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail="Pillow not installed") from exc
+
+    img = Image.new("L", (128, 64), 255 if invert else 0)
+    draw = ImageDraw.Draw(img)
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    text = (text or "Hello")[:80]
+
+    def load_font(size: int):
+        try:
+            return ImageFont.truetype(font_path, size)
+        except (OSError, IOError):
+            return ImageFont.load_default()
+
+    def wrap_lines(font) -> list[str]:
+        words = text.split() or [text]
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            bbox = draw.textbbox((0, 0), candidate, font=font)
+            if bbox[2] - bbox[0] <= 124 or not current:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        return lines[:3]
+
+    font = load_font(max(8, min(font_size, 28)))
+    lines = wrap_lines(font)
+    while font_size > 8:
+        heights = [draw.textbbox((0, 0), line, font=font)[3] - draw.textbbox((0, 0), line, font=font)[1] for line in lines]
+        max_width = max((draw.textbbox((0, 0), line, font=font)[2] - draw.textbbox((0, 0), line, font=font)[0] for line in lines), default=0)
+        total_height = sum(heights) + max(0, len(lines) - 1) * 2
+        if max_width <= 124 and total_height <= 60:
+            break
+        font_size -= 1
+        font = load_font(font_size)
+        lines = wrap_lines(font)
+
+    heights = [draw.textbbox((0, 0), line, font=font)[3] - draw.textbbox((0, 0), line, font=font)[1] for line in lines]
+    total_height = sum(heights) + max(0, len(lines) - 1) * 2
+    y = max(0, (64 - total_height) // 2)
+    fill = 0 if invert else 255
+    for line, height in zip(lines, heights):
+        bbox = draw.textbbox((0, 0), line, font=font)
+        width = bbox[2] - bbox[0]
+        x = max(0, (128 - width) // 2 - bbox[0])
+        draw.text((x, y - bbox[1]), line, fill=fill, font=font)
+        y += height + 2
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        tmp = Path(f.name)
+        img.save(f, "PNG")
+    return tmp
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     return {"service": "eilik", "status": "ok"}
@@ -154,6 +230,11 @@ def root() -> dict[str, str]:
 
 @app.get("/app", include_in_schema=False)
 def web_app() -> FileResponse:
+    return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/app/game", include_in_schema=False)
+def web_game() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html")
 
 
@@ -365,24 +446,7 @@ def display_text(payload: dict) -> dict[str, str]:
     invert = bool(payload.get("invert", True))
     hold_seconds = float(payload.get("hold_seconds", 2.0))
     auto_idle = bool(payload.get("auto_idle", False))
-    try:
-        from PIL import Image, ImageDraw, ImageFont
-    except ImportError:
-        return {"status": "error", "message": "Pillow not installed"}
-    img = Image.new("L", (128, 64), 255 if invert else 0)
-    draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-    except (OSError, IOError):
-        font = ImageFont.load_default()
-    draw.text((2, 2), text, fill=(0 if invert else 255), font=font)
-    import io as _io
-    buf = _io.BytesIO()
-    img.save(buf, "PNG")
-    from pathlib import Path
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-        f.write(buf.getvalue())
-        tmp = Path(f.name)
+    tmp = _render_text_png(text, font_size=font_size, invert=invert)
     try:
         ok = controller.display_image(tmp, invert=False,
                                        hold_seconds=hold_seconds, auto_idle=auto_idle)
@@ -400,31 +464,11 @@ def _display_text_arms(payload: dict) -> dict[str, object]:
     threshold = _int(payload, "threshold", 128)
     cleanup = str(payload.get("cleanup", "disconnect_only"))
     pause = max(0.0, min(_float(payload, "step_pause_seconds", 0.05), 1.0))
-    allowed_cleanup = {"disconnect_only", "arms_down", "arms_rest", "reset_pose", "idle_face"}
-    if cleanup not in allowed_cleanup:
-        raise HTTPException(status_code=400, detail=f"cleanup must be one of {sorted(allowed_cleanup)}")
+    if cleanup not in ALLOWED_CLEANUP:
+        raise HTTPException(status_code=400, detail=f"cleanup must be one of {sorted(ALLOWED_CLEANUP)}")
 
     def run(robot: EilikController) -> dict[str, object]:
-        try:
-            from PIL import Image, ImageDraw, ImageFont
-        except ImportError as exc:
-            raise HTTPException(status_code=500, detail="Pillow not installed") from exc
-
-        img = Image.new("L", (128, 64), 255 if invert else 0)
-        draw = ImageDraw.Draw(img)
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-        except (OSError, IOError):
-            font = ImageFont.load_default()
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        x = max(0, (128 - tw) // 2 - bbox[0])
-        y = max(0, (64 - th) // 2 - bbox[1])
-        draw.text((x, y), text, fill=(0 if invert else 255), font=font)
-
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            tmp = Path(f.name)
-            img.save(f, "PNG")
+        tmp = _render_text_png(text, font_size=font_size, invert=invert)
 
         started = time.monotonic()
         arm_steps = 0
@@ -457,16 +501,7 @@ def _display_text_arms(payload: dict) -> dict[str, object]:
                 if pause:
                     time.sleep(pause)
 
-            if cleanup == "arms_down":
-                robot.move_motor(MOTOR_RIGHT_ARM, 2500)
-                robot.move_motor(MOTOR_LEFT_ARM, 500)
-            elif cleanup == "arms_rest":
-                robot.move_motor(MOTOR_RIGHT_ARM, REST_POSITION)
-                robot.move_motor(MOTOR_LEFT_ARM, REST_POSITION)
-            elif cleanup == "reset_pose":
-                robot.reset_pose()
-            elif cleanup == "idle_face":
-                robot.restore_idle_face(auto_rotate=True)
+            _apply_cleanup(robot, cleanup)
 
             elapsed = round(time.monotonic() - started, 3)
             robot.logger.info(
@@ -508,6 +543,86 @@ def routine_display_text_arms(payload: dict) -> dict[str, object]:
 def test_display_text_arms(payload: dict) -> dict[str, object]:
     """Backward-friendly alias for curl tests."""
     return _display_text_arms(payload)
+
+
+@app.post("/routine/sequence")
+def routine_sequence(payload: dict) -> dict[str, object]:
+    """Run an ordered kids-game sequence in one on-demand serial session.
+
+    Body: {
+      "steps": [
+        {"type": "display_text", "text": "Hello", "hold_seconds": 1.5},
+        {"type": "motion", "motion": "wave"},
+        {"type": "wait", "seconds": 0.5}
+      ],
+      "cleanup": "disconnect_only" | "arms_down" | "arms_rest" | "reset_pose" | "idle_face"
+    }
+    """
+    steps = payload.get("steps", [])
+    if not isinstance(steps, list) or not steps:
+        raise HTTPException(status_code=400, detail="steps must be a non-empty list")
+    if len(steps) > 30:
+        raise HTTPException(status_code=400, detail="steps must contain 30 items or fewer")
+    cleanup = str(payload.get("cleanup", "disconnect_only"))
+    if cleanup not in ALLOWED_CLEANUP:
+        raise HTTPException(status_code=400, detail=f"cleanup must be one of {sorted(ALLOWED_CLEANUP)}")
+    step_pause = max(0.0, min(_float(payload, "step_pause_seconds", 0.1), 2.0))
+
+    def run(robot: EilikController) -> dict[str, object]:
+        results: list[dict[str, object]] = []
+        started = time.monotonic()
+        robot.logger.info("SEQUENCE_START step_count=%s cleanup=%s", len(steps), cleanup)
+        for index, step in enumerate(steps, start=1):
+            if not isinstance(step, dict):
+                raise HTTPException(status_code=400, detail=f"step {index} must be an object")
+            step_type = str(step.get("type", ""))
+            if step_type == "motion":
+                motion = str(step.get("motion", ""))
+                if motion not in MOTIONS:
+                    raise HTTPException(status_code=400, detail=f"step {index} unknown motion: {motion}")
+                robot.logger.info("SEQUENCE_STEP index=%s type=motion motion=%s", index, motion)
+                robot._run_motion(motion)
+                results.append({"index": index, "type": "motion", "motion": motion, "status": "ok"})
+            elif step_type == "display_text":
+                text = str(step.get("text", ""))[:80]
+                hold_seconds = max(0.0, min(float(step.get("hold_seconds", 1.0)), 15.0))
+                font_size = max(8, min(int(step.get("font_size", 16)), 28))
+                invert = bool(step.get("invert", True))
+                robot.logger.info(
+                    "SEQUENCE_STEP index=%s type=display_text text=%r hold_seconds=%s",
+                    index,
+                    text,
+                    hold_seconds,
+                )
+                tmp = _render_text_png(text, font_size=font_size, invert=invert)
+                try:
+                    ok = robot.display_image(tmp, invert=False, hold_seconds=hold_seconds, auto_idle=False)
+                finally:
+                    tmp.unlink(missing_ok=True)
+                results.append({"index": index, "type": "display_text", "text": text, "status": "ok" if ok else "error"})
+            elif step_type == "wait":
+                seconds = max(0.0, min(float(step.get("seconds", 0.5)), 10.0))
+                robot.logger.info("SEQUENCE_STEP index=%s type=wait seconds=%s", index, seconds)
+                time.sleep(seconds)
+                results.append({"index": index, "type": "wait", "seconds": seconds, "status": "ok"})
+            else:
+                raise HTTPException(status_code=400, detail=f"step {index} unsupported type: {step_type}")
+
+            if step_pause and index < len(steps):
+                time.sleep(step_pause)
+
+        _apply_cleanup(robot, cleanup)
+        elapsed = round(time.monotonic() - started, 3)
+        robot.logger.info("SEQUENCE_END step_count=%s elapsed=%s cleanup=%s", len(steps), elapsed, cleanup)
+        return {
+            "status": "ok",
+            "step_count": len(steps),
+            "elapsed_seconds": elapsed,
+            "cleanup": cleanup,
+            "results": results,
+        }
+
+    return controller.run("routine.sequence", run)
 
 
 @app.post("/action")

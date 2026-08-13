@@ -10,8 +10,11 @@
   </head>
   <body>
     <header class="topbar">
+      <button class="menu-button" id="menuToggle" title="Open menu" aria-label="Open menu">
+        <i data-lucide="menu"></i>
+      </button>
       <div>
-        <h1>Eilik Control</h1>
+        <h1 id="pageTitle">Eilik Control</h1>
         <p id="statusLine">Checking API...</p>
       </div>
       <div class="top-actions">
@@ -26,7 +29,28 @@
       </div>
     </header>
 
-    <main class="layout">
+    <aside class="drawer" id="drawer" aria-label="Navigation">
+      <button class="drawer-close" id="menuClose" title="Close menu" aria-label="Close menu">
+        <i data-lucide="x"></i>
+      </button>
+      <nav class="drawer-nav">
+        <a href="/app" data-page-link="control">
+          <i data-lucide="sliders-horizontal"></i>
+          <span>Control Room</span>
+        </a>
+        <a href="/app/game" data-page-link="game">
+          <i data-lucide="blocks"></i>
+          <span>Kids Game</span>
+        </a>
+        <a href="/docs" target="_blank" rel="noreferrer">
+          <i data-lucide="book-open"></i>
+          <span>API Docs</span>
+        </a>
+      </nav>
+    </aside>
+    <div class="drawer-backdrop" id="drawerBackdrop"></div>
+
+    <main class="layout page active" id="controlPage" data-page="control">
       <section class="panel display-panel">
         <div class="panel-heading">
           <h2>Screen</h2>
@@ -146,6 +170,88 @@
           <span class="meta" id="lastAction">Idle</span>
         </div>
         <pre id="output" class="outputbox">Ready.</pre>
+      </section>
+    </main>
+
+    <main class="game-layout page" id="gamePage" data-page="game" hidden>
+      <section class="game-stage">
+        <div class="game-header">
+          <div>
+            <h2>Kids Game</h2>
+            <span class="meta">Sequence builder</span>
+          </div>
+          <button id="playSequence" class="primary big-play">
+            <i data-lucide="play"></i>
+            <span>Play</span>
+          </button>
+        </div>
+
+        <div class="game-columns">
+          <section class="game-panel palette-panel">
+            <div class="panel-heading">
+              <h2>Blocks</h2>
+              <span class="meta" id="gameBlockCount">Loading</span>
+            </div>
+            <div class="quick-message">
+              <label class="field">
+                <span>Screen message</span>
+                <input id="gameMessageText" maxlength="80" value="Hello Alice!!" />
+              </label>
+              <button id="addMessageBlock" type="button">
+                <i data-lucide="message-square-plus"></i>
+                <span>Add Message</span>
+              </button>
+            </div>
+            <div id="paletteBlocks" class="block-palette"></div>
+          </section>
+
+          <section class="game-panel sequence-panel">
+            <div class="panel-heading">
+              <h2>Sequence</h2>
+              <span class="meta" id="sequenceCount">0 blocks</span>
+            </div>
+            <div id="sequenceDropzone" class="sequence-dropzone">
+              <div class="empty-sequence">
+                <i data-lucide="move-down"></i>
+                <span>Drop blocks</span>
+              </div>
+            </div>
+            <div class="game-options">
+              <label class="field">
+                <span>Pause</span>
+                <input id="sequencePause" type="number" min="0" max="2" step="0.1" value="0.2" />
+              </label>
+              <label class="field">
+                <span>Cleanup</span>
+                <select id="sequenceCleanup">
+                  <option value="disconnect_only">Disconnect only</option>
+                  <option value="arms_down">Arms down</option>
+                  <option value="arms_rest">Arms rest</option>
+                  <option value="reset_pose">Reset pose</option>
+                  <option value="idle_face">Idle face</option>
+                </select>
+              </label>
+            </div>
+            <div class="button-row">
+              <button id="addWaitBlock" type="button">
+                <i data-lucide="timer"></i>
+                <span>Add Wait</span>
+              </button>
+              <button id="clearSequence" type="button">
+                <i data-lucide="trash-2"></i>
+                <span>Clear</span>
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <section class="game-panel game-output-panel">
+          <div class="panel-heading">
+            <h2>Run Log</h2>
+            <span class="meta" id="gameStatus">Ready</span>
+          </div>
+          <pre id="gameOutput" class="outputbox">Ready.</pre>
+        </section>
       </section>
     </main>
   </body>

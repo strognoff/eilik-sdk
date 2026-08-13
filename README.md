@@ -140,6 +140,7 @@ Live OpenAPI endpoints while the service is running:
 The same service also serves a local control webapp:
 
 - `GET http://127.0.0.1:8765/app`
+- `GET http://127.0.0.1:8765/app/game`
 
 Setup and troubleshooting guide:
 
@@ -147,16 +148,19 @@ Setup and troubleshooting guide:
 
 It calls the API endpoints directly and includes:
 
+- Burger-menu navigation between the control room and kids game
 - API status and docs links
 - Text-to-screen controls
 - Text plus both-arms routine controls
 - Motion buttons for every known movement
 - Direct servo sliders for right arm, left arm, torso, and head
+- Kids game sequence builder for message, wait, and movement blocks
 - Recent log viewer backed by `/logs/recent`
 - JSON output for every API response/error
 
 The webapp does not run any Eilik action on load. It only calls read-only
-service endpoints until a button is pressed.
+service endpoints until a button is pressed. The kids game posts a whole
+sequence to `/routine/sequence`, so the API owns the exact command order.
 
 ### Motion endpoints
 
@@ -197,6 +201,7 @@ display. Pass `auto_idle=true` only when that cleanup is explicitly wanted.
 ### Routines
 
 - `POST /routine/display_text_arms` — one on-demand serial session that writes text, moves both arms up/down for `duration_seconds`, then applies the requested cleanup
+- `POST /routine/sequence` — run ordered kids-game blocks in one on-demand serial session (`display_text`, `motion`, and `wait`)
 - `POST /test/display-text-arms` — alias for curl experiments
 
 Cleanup options:

@@ -146,3 +146,33 @@ def test_display_text_arms_routine_is_one_session(monkeypatch) -> None:
     assert "move:1:500" in robot.events
     assert "move:2:2500" in robot.events
     assert robot.events[-3:] == ["move:1:2500", "move:2:500", "disconnect"]
+
+
+def test_sequence_routine_runs_ordered_steps_in_one_session(monkeypatch) -> None:
+    monkeypatch.setattr(service.time, "sleep", lambda _seconds: None)
+
+    result = service.routine_sequence(
+        {
+            "steps": [
+                {"type": "display_text", "text": "Hi", "hold_seconds": 1},
+                {"type": "motion", "motion": "wave"},
+                {"type": "wait", "seconds": 0.25},
+            ],
+            "cleanup": "arms_rest",
+            "step_pause_seconds": 0,
+        }
+    )
+
+    assert result["status"] == "ok"
+    assert result["step_count"] == 3
+    assert len(FakeEilikController.instances) == 1
+    robot = FakeEilikController.instances[0]
+    assert robot.enable_keepalive is False
+    assert robot.events == [
+        "connect",
+        "display_image:1.0:False",
+        "motion:wave",
+        "move:1:1500",
+        "move:2:1500",
+        "disconnect",
+    ]

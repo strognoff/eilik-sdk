@@ -40,6 +40,12 @@ Open the local control webapp:
 xdg-open "$EILIK_URL/app"
 ```
 
+Open the kids game sequence builder:
+
+```bash
+xdg-open "$EILIK_URL/app/game"
+```
+
 Or browse to:
 
 ```text
@@ -48,7 +54,8 @@ http://127.0.0.1:8765/app
 
 The webapp calls this API directly. Loading it is read-only: it checks health,
 loads available motions, and reads recent logs. Eilik only moves or changes
-screen when a command button is pressed.
+screen when a command button is pressed. The kids game sends a whole playlist
+to `/routine/sequence`.
 
 ## Display
 
@@ -178,6 +185,29 @@ curl -X POST "$EILIK_URL/test/display-text-arms" \
   -H 'Content-Type: application/json' \
   -d '{"text":"Hello Alice!!","duration_seconds":5,"cleanup":"disconnect_only"}'
 ```
+
+Kids game sequence API:
+
+```bash
+curl -X POST "$EILIK_URL/routine/sequence" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "steps": [
+      {"type":"display_text","text":"Hello Alice!!","hold_seconds":1.5},
+      {"type":"motion","motion":"wave"},
+      {"type":"wait","seconds":0.5},
+      {"type":"motion","motion":"thumbs_up"}
+    ],
+    "cleanup":"disconnect_only",
+    "step_pause_seconds":0.2
+  }'
+```
+
+Supported sequence block types:
+
+- `display_text`: `text`, optional `hold_seconds`, optional `font_size`.
+- `motion`: `motion` from `GET /motions`.
+- `wait`: `seconds`.
 
 ## High-Level Actions
 

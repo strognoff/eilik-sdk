@@ -8,6 +8,12 @@ Local URL:
 http://127.0.0.1:8765/app
 ```
 
+Kids game URL:
+
+```text
+http://127.0.0.1:8765/app/game
+```
+
 Loading the page is read-only. It calls `/health`, `/motions`, and `/logs/recent`; Eilik only moves or changes screen after pressing a command button.
 
 ## Setup
@@ -48,21 +54,31 @@ Open the webapp:
 xdg-open http://127.0.0.1:8765/app
 ```
 
-Or paste this into a browser:
+Open the kids game page:
+
+```bash
+xdg-open http://127.0.0.1:8765/app/game
+```
+
+Or paste one of these into a browser:
 
 ```text
 http://127.0.0.1:8765/app
+http://127.0.0.1:8765/app/game
 ```
 
 ## What The Webapp Can Do
 
 - Show API status.
+- Navigate with the burger menu.
 - Link to FastAPI docs at `/docs`.
 - Send text to Eilik's screen.
 - Run the text plus both-arms routine.
 - Trigger every movement returned by `/motions`.
 - Move individual servos with sliders.
 - Read servo angles.
+- Build a kids sequence from message, wait, and movement blocks.
+- Play the sequence through `/routine/sequence` in one on-demand serial session.
 - Show recent rotating logs from `/logs/recent`.
 - Show the exact JSON response or error for each command.
 
@@ -72,6 +88,23 @@ http://127.0.0.1:8765/app
 curl http://127.0.0.1:8765/health
 curl http://127.0.0.1:8765/motions
 curl 'http://127.0.0.1:8765/logs/recent?lines=80'
+```
+
+Run the same kind of sequence the kids game sends:
+
+```bash
+curl -X POST http://127.0.0.1:8765/routine/sequence \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "steps": [
+      {"type":"display_text","text":"Hello Alice!!","hold_seconds":1.5},
+      {"type":"motion","motion":"wave"},
+      {"type":"wait","seconds":0.5},
+      {"type":"motion","motion":"thumbs_up"}
+    ],
+    "cleanup":"disconnect_only",
+    "step_pause_seconds":0.2
+  }'
 ```
 
 Between commands, `/health` should report:
@@ -128,4 +161,3 @@ The API logs rotate automatically:
 - `EILIK_LOG_PATH`: default `logs/eilik.log`
 - `EILIK_LOG_MAX_BYTES`: default `1000000`
 - `EILIK_LOG_BACKUP_COUNT`: default `5`
-
