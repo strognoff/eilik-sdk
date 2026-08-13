@@ -10,21 +10,48 @@ from fastapi.responses import JSONResponse
 
 from .controller import EilikController
 
-controller = EilikController(
-    port=os.getenv("EILIK_PORT") or None,
-    log_path=os.getenv("EILIK_LOG_PATH", "logs/eilik.log"),
-)
+SERVICE_PORT = os.getenv("EILIK_PORT") or None
+LOG_PATH = os.getenv("EILIK_LOG_PATH", "logs/eilik.log")
 app = FastAPI(title="Eilik Controller Service", version="0.1.0")
 
 
-@app.on_event("startup")
-def startup() -> None:
-    controller.connect()
+class OnDemandController:
+    """Open Eilik only while handling one API command, then release USB serial."""
+
+    @property
+    def connected(self) -> bool:
+        return False
+
+    @property
+    def protocol_variant(self) -> None:
+        return None
+
+    @property
+    def port(self) -> str | None:
+        if SERVICE_PORT:
+            return SERVICE_PORT
+        try:
+            return EilikController.detect_port()
+        except Exception:
+            return None
+
+    def __getattr__(self, name: str):
+        def call(*args, **kwargs):
+            robot = EilikController(
+                port=SERVICE_PORT,
+                log_path=LOG_PATH,
+                enable_keepalive=False,
+            )
+            try:
+                robot.connect()
+                return getattr(robot, name)(*args, **kwargs)
+            finally:
+                robot.disconnect()
+
+        return call
 
 
-@app.on_event("shutdown")
-def shutdown() -> None:
-    controller.disconnect()
+controller = OnDemandController()
 
 
 @app.get("/")
@@ -34,12 +61,38 @@ def root() -> dict[str, str]:
 
 @app.get("/health")
 def health() -> dict[str, object]:
-    return {"connected": controller.connected, "port": controller.port, "protocol": controller.protocol_variant}
+    return {
+        "service": "ok",
+        "mode": "on-demand",
+        "connected": controller.connected,
+        "port": controller.port,
+        "protocol": controller.protocol_variant,
+    }
 
 
 @app.get("/status")
 def status() -> dict[str, object]:
     return health()
+
+
+@app.get("/diagnostic/snapshot")
+def diagnostic_snapshot(include_display: bool = False) -> dict[str, object]:
+    """Read live state back from Eilik for debugging."""
+    return controller.diagnostic_snapshot(include_display=include_display)
+
+
+@app.post("/diagnostic/motion")
+def diagnostic_motion(payload: dict | None = None) -> dict[str, object]:
+    """Move one motor, verify readback changed, then restore rest."""
+    payload = payload or {}
+    motor_id = int(payload.get("motor_id", 1))
+    test_position = int(payload.get("test_position", 500))
+    rest_position = int(payload.get("rest_position", 1500))
+    return controller.diagnose_motion(
+        motor_id=motor_id,
+        test_position=test_position,
+        rest_position=rest_position,
+    )
 
 
 @app.post("/wave")
@@ -70,6 +123,20 @@ def look_right() -> dict[str, str]:
 def reset() -> dict[str, str]:
     controller.reset_pose()
     return {"status": "ok", "action": "reset"}
+
+
+@app.post("/display/release")
+def display_release() -> dict[str, str]:
+    """Release user-display mode so Eilik's firmware can resume its own face loop."""
+    controller.release_display_lock()
+    return {"status": "ok", "action": "display_release"}
+
+
+@app.post("/display/idle")
+def display_idle() -> dict[str, str]:
+    """Restore the known calm idle face."""
+    ok = controller.restore_idle_face()
+    return {"status": "ok" if ok else "error", "action": "display_idle"}
 
 
 @app.post("/display/image")
@@ -355,11 +422,49 @@ def event_quinn() -> dict[str, str]:
 
 
 @app.post("/event/crypto_pumped")
-def event_crypto(payload: dict) -> dict[str, str]:
+def event_crypto(payload: dict) -> JSONResponse:
     ticker = str(payload.get("ticker", "BTC"))
     pct = float(payload.get("pct", 0))
     controller.crypto_pumped(ticker, pct)
-    return {"status": "ok", "ticker": ticker, "pct": pct}
+    return JSONResponse(content={"status": "ok", "ticker": ticker, "pct": pct})
+
+
+@app.post("/event/pr_alert")
+def event_pr_alert(payload: dict) -> dict[str, str]:
+    """A new PR opened — heart hands + PR! face for 10s."""
+    pr_number = int(payload.get("pr_number", 0))
+    author = str(payload.get("author", ""))
+    controller.pr_alert(pr_number, author)
+    return {"status": "ok", "pr_number": str(pr_number), "author": author}
+
+
+@app.post("/event/welcome_back")
+def event_welcome_back() -> dict[str, str]:
+    """Jeff opened chat after >2h silence."""
+    controller.welcome_back()
+    return {"status": "ok"}
+
+
+@app.post("/celebrate")
+def celebrate(payload: dict) -> dict[str, str]:
+    """Celebrate a win: wiggle + heart hands + bright face for 10s.
+
+    Body: {"label": "PR#104"} (optional text shown with the celebration).
+    """
+    label = str(payload.get("label", ""))
+    controller.celebrate(label)
+    return {"status": "ok", "label": label}
+
+
+@app.post("/apology")
+def apology(payload: dict) -> dict[str, str]:
+    """Apologize for a failure: shake head + shrug + sad face for 10s.
+
+    Body: {"reason": "timeout"} (optional reason shown with the apology).
+    """
+    reason = str(payload.get("reason", ""))
+    controller.apology(reason)
+    return {"status": "ok", "reason": reason}
 
 
 @app.post("/choreo")

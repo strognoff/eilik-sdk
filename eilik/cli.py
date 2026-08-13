@@ -27,7 +27,8 @@ MOTION_COMMANDS = {
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Control an Eilik robot over USB serial.")
     new_cmds = ["action", "ambient", "choreo", "list_actions", "morning",
-                "welcome", "cron_done", "error", "subagent_done", "email", "quinn"]
+                "welcome", "cron_done", "error", "subagent_done", "email", "quinn",
+                "celebrate", "apology"]
     parser.add_argument(
         "command",
         choices=["connect", "monitor", "serve", "read_display", "write_display",
@@ -238,6 +239,16 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "quinn":
             controller.quinn_comms()
+            print("OK")
+            return 0
+
+        if args.command == "celebrate":
+            controller.celebrate(args.name or "")
+            print("OK")
+            return 0
+
+        if args.command == "apology":
+            controller.apology(args.name or "")
             print("OK")
             return 0
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import glob
+import hashlib
 import os
 import threading
 import time
@@ -23,6 +24,7 @@ from .pack import (
 from .protocol import (
     BAUD_RATE,
     HB1,
+    MOTOR_RIGHT_ARM,
     OFFICIAL_STATUS_REQUEST,
     REST_POSITION,
     SERIAL_TIMEOUT_SECONDS,
@@ -61,12 +63,14 @@ class EilikController:
         log_path: str | Path = DEFAULT_LOG_PATH,
         reconnect_attempts: int = 3,
         keepalive_interval: float = 2.0,
+        enable_keepalive: bool = True,
     ) -> None:
         self.port = port
         self.baud_rate = baud_rate
         self.timeout = timeout
         self.reconnect_attempts = reconnect_attempts
         self.keepalive_interval = keepalive_interval
+        self.enable_keepalive = enable_keepalive
         self.logger = setup_logger(log_path)
 
         self._serial = None
@@ -154,7 +158,7 @@ class EilikController:
 
             self._serial = ser
             self._handshake()
-            if self._session_token:
+            if self._session_token and self.enable_keepalive:
                 self._start_keepalive()
             self.logger.info(
                 "CONNECTED protocol=%s token=%s",
@@ -219,6 +223,33 @@ class EilikController:
         """Send `cmd=0xA6` with a 1-byte animation index."""
         self._send_simple(_write_running_number(index), f"TX_RUNNING idx={index}")
 
+    def release_display_lock(self) -> None:
+        """Release user-display mode so the firmware can resume its own face loop."""
+        self.logger.info(
+            "DISPLAY_RELEASE running_number=%s",
+            RELEASE_DISPLAY_RUNNING_NUMBER,
+        )
+        self.write_running_number(RELEASE_DISPLAY_RUNNING_NUMBER)
+
+    def restore_idle_face(self, auto_rotate: bool = True) -> bool:
+        """Restore the known calm idle face and keep it in user-display mode.
+
+        On the current Eilik firmware, `running_number=0` can redraw a static
+        wave/status icon instead of the normal-looking idle eyes. The calm
+        captured face is the least surprising recovery state after a custom
+        display action.
+        """
+        idle_path = Path(__file__).resolve().parent.parent / "captures" / "eilik-display-cmd-A3.png"
+        if not idle_path.exists():
+            self.logger.warning("IDLE_FACE_MISSING %s", idle_path)
+            return False
+        return self._display_image_raw(
+            idle_path,
+            threshold=128,
+            invert=False,
+            auto_rotate=auto_rotate,
+        )
+
     def read_display(self) -> Optional[bytes]:
         """Send `cmd=0xA3` and return the 1024-byte framebuffer image.
 
@@ -243,7 +274,14 @@ class EilikController:
         frames = _FrameBuffer().feed(buf)
         if not frames:
             return None
-        f = frames[0]
+        f = self._first_matching_frame(frames, 0xA3)
+        if f is None:
+            self.logger.warning(
+                "RX_READ_DISPLAY no cmd=0xA3 frame cmds=%s raw=%s",
+                self._frame_commands(frames),
+                hex_bytes(buf),
+            )
+            return None
         # frame layout: magic(3) | length u16 LE(2) | cmd echo(1) | status(1) |
         #               1024 image bytes | checksum(1)
         if len(f) < 1032:
@@ -287,7 +325,14 @@ class EilikController:
         if not frames:
             return False
         # frame layout: magic(3) | length u16 LE(2) | cmd echo(1) | status(1) | checksum(1)
-        f = frames[0]
+        f = self._first_matching_frame(frames, 0xA4)
+        if f is None:
+            self.logger.warning(
+                "RX_WRITE_DISPLAY no cmd=0xA4 frame cmds=%s raw=%s",
+                self._frame_commands(frames),
+                hex_bytes(buf),
+            )
+            return False
         if len(f) < 7:
             return False
         status = f[6]
@@ -325,7 +370,7 @@ class EilikController:
         self._run_motion("right_arm_down")
 
     def display_image(self, png_path: str | Path, threshold: int = 128,
-                      invert: bool = False, hold_seconds: float = 0.0,
+                      invert: bool = False, hold_seconds: float = 10.0,
                       auto_idle: bool = True, auto_rotate: bool = True) -> bool:
         """Convert a PNG (any size; auto-resized to 128x64) to a 1024-byte
         framebuffer and push it via `cmd=0xA4`.
@@ -333,7 +378,12 @@ class EilikController:
         Use `invert=True` if the source PNG is white-on-black (Eilik's OLED
         is black-on-white, so most PNGs need inversion).
 
-        With `hold_seconds=N`, the face stays for N seconds before reverting.
+        With `hold_seconds=N` (default 10s — long enough that Jeff can see
+        the message if he's in the room, short enough that the firmware
+        idle resumes naturally before any next event), the face stays for
+        N seconds before reverting. Pass `hold_seconds=0` to flash and
+        immediately revert.
+
         With `auto_idle=True` (default), the firmware's default idle face is
         restored after the hold. This puts the robot back to its true idle
         state instead of a blank/cleared screen, so the firmware's idle
@@ -356,19 +406,7 @@ class EilikController:
                 if hold_seconds > 0:
                     time.sleep(hold_seconds)
                 if auto_idle:
-                    idle_path = Path(__file__).resolve().parent.parent / "captures" / "eilik-display-cmd-A3.png"
-                    if idle_path.exists():
-                        self._display_image_raw(idle_path, threshold=128, invert=False,
-                                                auto_rotate=auto_rotate)
-                    # After restoring the firmware idle framebuffer, release
-                    # the user-display lock so the firmware's idle animation
-                    # can resume (otherwise it stays stuck on the captured frame).
-                    with self._lock:
-                        if self._serial is not None:
-                            self._write_raw(
-                                _write_running_number(RELEASE_DISPLAY_RUNNING_NUMBER),
-                                f"TX_WRITE_RUNNING idx={RELEASE_DISPLAY_RUNNING_NUMBER} (release)"
-                            )
+                    self.restore_idle_face(auto_rotate=auto_rotate)
             except Exception as exc:
                 self.logger.warning("AUTO_IDLE_FAILED %s", exc)
         return ok
@@ -419,6 +457,95 @@ class EilikController:
         except Exception as exc:
             self.logger.warning("AUTO_RESET_FAILED %s", exc)
 
+    def diagnostic_snapshot(self, include_display: bool = False) -> dict[str, object]:
+        """Read back robot state for debugging.
+
+        This is intentionally based on device replies, not on what the SDK last
+        tried to send. It gives us a better signal when the HTTP service says
+        "ok" but the physical robot did not visibly react.
+        """
+        started = time.monotonic()
+        snapshot: dict[str, object] = {
+            "connected": self.connected,
+            "port": self.port,
+            "protocol": self.protocol_variant,
+            "include_display": include_display,
+        }
+        try:
+            snapshot["servo_angles"] = self.read_servo_angles()
+        except Exception as exc:
+            snapshot["servo_error"] = str(exc)
+            self.logger.warning("DIAG_SERVO_READ_FAILED %s", exc)
+        try:
+            snapshot["running_number"] = self.read_running_number()
+        except Exception as exc:
+            snapshot["running_number_error"] = str(exc)
+            self.logger.warning("DIAG_RUNNING_READ_FAILED %s", exc)
+        if include_display:
+            try:
+                display = self.read_display()
+                if display is None:
+                    snapshot["display"] = None
+                else:
+                    snapshot["display"] = {
+                        "length": len(display),
+                        "sha1": hashlib.sha1(display).hexdigest(),
+                        "nonzero_bytes": sum(1 for b in display if b),
+                    }
+            except Exception as exc:
+                snapshot["display_error"] = str(exc)
+                self.logger.warning("DIAG_DISPLAY_READ_FAILED %s", exc)
+        snapshot["duration_ms"] = round((time.monotonic() - started) * 1000)
+        self.logger.info("DIAG_SNAPSHOT %s", snapshot)
+        return snapshot
+
+    @staticmethod
+    def _angles_changed(before: object, after: object) -> bool:
+        return isinstance(before, list) and isinstance(after, list) and before != after
+
+    def diagnose_motion(
+        self,
+        motor_id: int = MOTOR_RIGHT_ARM,
+        test_position: int = 500,
+        rest_position: int = REST_POSITION,
+    ) -> dict[str, object]:
+        """Move one motor, read state during the move, then restore rest.
+
+        This verifies that Eilik is replying with changed servo state after a
+        command. It is a stronger proof than "TX packet was written".
+        """
+        started = time.monotonic()
+        self.logger.info(
+            "DIAG_MOTION_START motor=%s test_position=%s rest_position=%s",
+            motor_id,
+            test_position,
+            rest_position,
+        )
+        before = self.diagnostic_snapshot(include_display=False)
+        self.move_motor(motor_id, test_position)
+        time.sleep(0.35)
+        during = self.diagnostic_snapshot(include_display=False)
+        self.move_motor(motor_id, rest_position)
+        time.sleep(0.35)
+        after = self.diagnostic_snapshot(include_display=False)
+        result: dict[str, object] = {
+            "motor_id": motor_id,
+            "test_position": test_position,
+            "rest_position": rest_position,
+            "before": before,
+            "during": during,
+            "after": after,
+            "changed_during_move": self._angles_changed(
+                before.get("servo_angles"), during.get("servo_angles")
+            ),
+            "changed_after_restore": self._angles_changed(
+                during.get("servo_angles"), after.get("servo_angles")
+            ),
+            "duration_ms": round((time.monotonic() - started) * 1000),
+        }
+        self.logger.info("DIAG_MOTION_END %s", result)
+        return result
+
     def action(self, name: str, hold_seconds: float | None = None,
                async_motion: bool = True, auto_idle: bool = True) -> bool:
         """Run a high-level action from `eilik/actions.py`.
@@ -439,12 +566,26 @@ class EilikController:
         if hold_seconds is None:
             hold_seconds = action_hold
 
+        self.logger.info(
+            "ACTION_START name=%s motion=%s face=%s hold=%s async_motion=%s auto_idle=%s",
+            name,
+            motion_name,
+            face_tag,
+            hold_seconds,
+            async_motion,
+            auto_idle,
+        )
+        started = time.monotonic()
         ok = True
+        motion_errors: list[str] = []
+        motion_thread: threading.Thread | None = None
+
         # Show face first (lock firmware in user-display mode)
         if face_tag:
             face_path = resolve_face(face_tag)
             try:
-                ok = self.display_image(face_path, auto_idle=False)
+                ok = self.display_image(face_path, hold_seconds=0, auto_idle=False)
+                self.logger.info("ACTION_FACE_OK name=%s tag=%s ok=%s", name, face_tag, ok)
             except Exception as exc:
                 self.logger.warning("ACTION_FACE_FAILED %s tag=%s %s", name, face_tag, exc)
                 ok = False
@@ -453,35 +594,48 @@ class EilikController:
         if motion_name:
             try:
                 if async_motion and face_tag:
-                    import threading
-                    t = threading.Thread(target=self._safe_run_motion, args=(motion_name,),
-                                         daemon=True)
-                    t.start()
+                    def run_motion() -> None:
+                        try:
+                            self._run_motion(motion_name)
+                        except Exception as exc:
+                            motion_errors.append(str(exc))
+                            self.logger.warning("ACTION_MOTION_FAILED %s motion=%s %s", name, motion_name, exc)
+
+                    motion_thread = threading.Thread(target=run_motion, daemon=True)
+                    motion_thread.start()
                 else:
                     self._run_motion(motion_name)
             except Exception as exc:
                 self.logger.warning("ACTION_MOTION_FAILED %s motion=%s %s", name, motion_name, exc)
+                motion_errors.append(str(exc))
 
         # Hold face visible for the action duration
         if hold_seconds and hold_seconds > 0:
             time.sleep(hold_seconds)
 
-        # Restore firmware idle (release user-display lock)
-        if auto_idle:
-            idle_path = Path(__file__).resolve().parent.parent / "captures" / "eilik-display-cmd-A3.png"
-            if idle_path.exists() and ok:
-                try:
-                    self._display_image_raw(idle_path, threshold=128, invert=False, auto_rotate=True)
-                    with self._lock:
-                        if self._serial is not None:
-                            self._write_raw(
-                                _write_running_number(RELEASE_DISPLAY_RUNNING_NUMBER),
-                                f"TX_WRITE_RUNNING idx={RELEASE_DISPLAY_RUNNING_NUMBER} (release)"
-                            )
-                except Exception as exc:
-                    self.logger.warning("ACTION_AUTO_IDLE_FAILED %s", exc)
+        if motion_thread is not None:
+            motion_thread.join(timeout=5.0)
+            if motion_thread.is_alive():
+                motion_errors.append("motion thread did not finish within 5s")
+                self.logger.warning("ACTION_MOTION_TIMEOUT name=%s motion=%s", name, motion_name)
 
-        return ok
+        # Restore the calm idle face.
+        if auto_idle:
+            try:
+                self.restore_idle_face(auto_rotate=True)
+            except Exception as exc:
+                self.logger.warning("ACTION_AUTO_IDLE_FAILED %s", exc)
+
+        result_ok = ok and not motion_errors
+        self.logger.info(
+            "ACTION_END name=%s ok=%s face_ok=%s motion_errors=%s duration_ms=%s",
+            name,
+            result_ok,
+            ok,
+            motion_errors,
+            round((time.monotonic() - started) * 1000),
+        )
+        return result_ok
 
     def _safe_run_motion(self, name: str) -> None:
         """Run a motion without raising."""
@@ -610,8 +764,20 @@ class EilikController:
             elif kind == "wait":
                 time.sleep(float(value))
             elif kind == "face":
-                p = Path(value)
-                hold = step.get('hold', 2.0)
+                # Resolve face tag (e.g. "status_done" or "status_done.png")
+                # to the actual PNG. Absolute paths are used as-is.
+                from .actions import resolve_face
+                face_val = str(value)
+                if Path(face_val).is_absolute() and Path(face_val).exists():
+                    p = Path(face_val)
+                else:
+                    # Strip extension if present and try to resolve as a face tag
+                    tag = Path(face_val).stem
+                    resolved = resolve_face(tag)
+                    if resolved is None:
+                        resolved = resolve_face(face_val)
+                    p = Path(resolved) if resolved else Path(face_val)
+                hold = step.get('hold', 10.0)
                 self.display_image(p, hold_seconds=hold)
             time.sleep(inter_step_delay)
 
@@ -628,70 +794,132 @@ class EilikController:
         ], inter_step_delay=0.3)
 
     def task_completed(self) -> None:
-        """Default celebration when a task completes."""
-        self.action('status_done')
+        """Default celebration when a task completes — wiggle + heart hands."""
+        self.celebrate()
 
     def task_failed(self) -> None:
-        """Default apology when something fails."""
-        self.choreography([
-            {"action": "frustrated"},
-            {"wait": 1.0},
-            {"text": "sorry", "hold": 2},
-        ], inter_step_delay=0.3)
+        """Default apology when something fails — shake head + shrug."""
+        self.apology()
+
+    def celebrate(self, label: str = "") -> None:
+        """Celebration sequence: wiggle + heart hands + bright face for 10s.
+
+        Used for completions, wins, PRs, crypto pumps — anything worth cheering.
+        If `label` is given, the face shows that text instead of the default ✓.
+        """
+        steps = [
+            {"motion": "wiggle"},
+            {"wait": 0.6},
+            {"motion": "heart_hands"},
+            {"wait": 0.6},
+            {"face": "status_done.png", "hold": 10.0},
+        ]
+        if label:
+            steps.insert(-1, {"text": label[:8], "hold": 2.0})
+        self.choreography(steps, inter_step_delay=0.2)
+
+    def apology(self, reason: str = "") -> None:
+        """Apology sequence: shake head + shrug + sad face for 10s.
+
+        Used for failures, mistakes, things that went wrong. If `reason` is
+        given, the face shows that text after the apology gesture.
+        """
+        steps = [
+            {"motion": "shake_head_emphatic"},
+            {"wait": 0.4},
+            {"motion": "shrug"},
+            {"wait": 0.4},
+            {"face": "status_error.png", "hold": 10.0},
+        ]
+        if reason:
+            steps.insert(-1, {"text": reason[:8], "hold": 2.0})
+        self.choreography(steps, inter_step_delay=0.2)
 
     def thinking_handoff(self) -> None:
-        """Nova is about to spawn a subagent."""
+        """Nova is about to spawn a subagent — peek + thinking face."""
         self.choreography([
-            {"action": "thinking"},
+            {"motion": "peek"},
+            {"face": "mood_thinking.png", "hold": 5.0},
         ], inter_step_delay=0.2)
 
     def subagent_returned(self, name: str = "") -> None:
-        """Nova's subagent has returned."""
-        steps = [{"action": "got_it"}]
+        """Nova's subagent has returned — nod + ✓ face for 10s."""
+        steps = [
+            {"motion": "nod_emphatic"},
+            {"face": "comms_got_it.png", "hold": 10.0},
+        ]
         if name:
-            steps.append({"text": name[:8], "hold": 1.5})
+            steps.insert(-1, {"text": name[:8], "hold": 2.0})
         self.choreography(steps, inter_step_delay=0.3)
 
     def cron_tick_done(self, cron_name: str = "") -> None:
-        """A cron successfully completed a tick."""
-        steps = [{"action": "done"}]
+        """A cron successfully completed a tick — small nod + ✓ face for 10s.
+
+        Designed for ambient background acknowledgment: not loud, but visible
+        if Jeff happens to glance at Eilik when a cron fires.
+        """
+        steps = [
+            {"motion": "nod"},
+            {"face": "status_done.png", "hold": 10.0},
+        ]
         if cron_name:
-            steps.append({"text": cron_name[:8], "hold": 1.5})
+            steps.insert(-1, {"text": cron_name[:8], "hold": 2.0})
         self.choreography(steps, inter_step_delay=0.3)
 
     def error_flash(self, message: str = "") -> None:
-        """Something crashed."""
-        steps = [{"action": "status_error"}]
+        """Something crashed — head shake + ✗ face for 10s."""
+        steps = [
+            {"motion": "shake_head_emphatic"},
+            {"face": "status_error.png", "hold": 10.0},
+        ]
         if message:
-            steps.append({"text": message[:8], "hold": 1.5})
+            steps.insert(-1, {"text": message[:8], "hold": 2.0})
         self.choreography(steps, inter_step_delay=0.3)
 
     def email_arrived(self, sender: str = "") -> None:
-        """New email at the high-priority inbox."""
-        steps = [{"action": "email_new"}]
+        """New email at the high-priority inbox — peek + ☑ face for 10s."""
+        steps = [
+            {"motion": "peek"},
+            {"face": "email_new.png", "hold": 10.0},
+        ]
         if sender:
-            steps.append({"text": sender[:8], "hold": 1.5})
+            steps.insert(-1, {"text": sender[:8], "hold": 2.0})
         self.choreography(steps, inter_step_delay=0.3)
 
     def pr_alert(self, pr_number: int = 0, author: str = "") -> None:
-        """A new PR opened."""
-        self.show_pr(pr_number, author)
+        """A new PR opened — heart hands + PR! face for 10s."""
+        steps = [
+            {"motion": "heart_hands"},
+            {"face": "pr_alert.png", "hold": 10.0},
+        ]
+        if pr_number:
+            steps.insert(-1, {"text": f"#{pr_number}", "hold": 2.0})
+        elif author:
+            steps.insert(-1, {"text": author[:8], "hold": 2.0})
+        self.choreography(steps, inter_step_delay=0.3)
 
     def quinn_comms(self) -> None:
-        """Quinn pinged in chat."""
-        self.action('quinn_comms')
+        """Quinn pinged in chat — wave + 👋 face for 10s."""
+        self.choreography([
+            {"motion": "wave"},
+            {"face": "quinn_comms.png", "hold": 10.0},
+        ], inter_step_delay=0.3)
 
     def crypto_pumped(self, ticker: str = "BTC", pct: float = 5.0) -> None:
-        """A target coin moved >5% in an hour."""
-        self.show_crypto_ticker(ticker, pct)
+        """A target coin moved >5% in an hour — wiggle + 🚀 face for 10s."""
+        steps = [
+            {"motion": "wiggle"},
+            {"face": "comms_crypto_pumped.png", "hold": 10.0},
+            {"text": f"{ticker}+{int(pct)}%", "hold": 3.0},
+        ]
+        self.choreography(steps, inter_step_delay=0.3)
 
     def welcome_back(self) -> None:
-        """Jeff opened chat after >2h silence."""
+        """Jeff opened chat after >2h silence — wave + Hi! face for 10s."""
         self.choreography([
-            {"action": "welcome_back"},
-            {"wait": 0.5},
             {"motion": "wave"},
-        ], inter_step_delay=0.4)
+            {"face": "greeting_welcome_back.png", "hold": 10.0},
+        ], inter_step_delay=0.3)
 
     def monitor(self, output_path: str | Path = "logs/eilik-monitor.log") -> None:
         """Continuously print and save incoming serial chunks as hex frames."""
@@ -720,7 +948,11 @@ class EilikController:
                 self.logger.info("RX %s", hex_bytes(data))
 
     def _run_motion(self, name: str) -> None:
-        self._send_commands(MOTIONS[name])
+        commands = MOTIONS[name]
+        self.logger.info("MOTION_START name=%s command_count=%s", name, len(commands))
+        started = time.monotonic()
+        self._send_commands(commands)
+        self.logger.info("MOTION_END name=%s duration_ms=%s", name, round((time.monotonic() - started) * 1000))
 
     def _send_commands(self, commands: Iterable[ServoCommand]) -> None:
         for command in commands:
@@ -823,17 +1055,26 @@ class EilikController:
                     buf += self._serial.read(n)
                 else:
                     time.sleep(0.02)
-        self.logger.info("RX_%s %d bytes", label, len(buf))
+        self.logger.info("RX_%s %d bytes %s", label, len(buf), hex_bytes(buf))
         frames = _FrameBuffer().feed(buf)
         if not frames:
             return []
-        f = frames[0]
+        f = self._first_matching_frame(frames, expected_cmd)
+        if f is None:
+            self.logger.warning(
+                "RX_%s no cmd=0x%02x frame cmds=%s raw=%s",
+                label,
+                expected_cmd,
+                self._frame_commands(frames),
+                hex_bytes(buf),
+            )
+            return []
         # frame layout: magic(3) | length u16 LE(2) | cmd echo(1) | status(1) | payload | checksum(1)
         if len(f) < 7:
             return []
         payload = f[7:-1]
         if payload_words == 1:
-            return [payload[0]] if payload else []
+            return [payload[0]] if payload else [f[6]]
         # decode `payload_words` u16 little-endian
         import struct as _struct
         out = []
@@ -847,6 +1088,20 @@ class EilikController:
     def _ensure_connected(self) -> None:
         if not self.connected:
             self.connect()
+
+    @staticmethod
+    def _frame_commands(frames: Iterable[bytes]) -> list[int | None]:
+        out: list[int | None] = []
+        for frame in frames:
+            out.append(frame[5] if len(frame) > 5 else None)
+        return out
+
+    @staticmethod
+    def _first_matching_frame(frames: Iterable[bytes], expected_cmd: int) -> bytes | None:
+        for frame in frames:
+            if len(frame) > 5 and frame[5] == expected_cmd:
+                return frame
+        return None
 
     def _reconnect(self) -> None:
         self.logger.warning("RECONNECT requested")

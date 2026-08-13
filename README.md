@@ -107,7 +107,7 @@ python cli.py monitor
 
 ## FastAPI Service
 
-Start the service:
+Start the local HTTP API:
 
 ```bash
 python cli.py serve --host 127.0.0.1 --port-http 8765
@@ -119,11 +119,16 @@ With an explicit serial device:
 python cli.py serve --port /dev/ttyACM0 --host 127.0.0.1 --port-http 8765
 ```
 
+The service uses an **on-demand serial model**: it does not connect to Eilik at
+startup, and it does not keep a background keepalive loop running. Each command
+opens the serial session, runs the action, then disconnects so Eilik's firmware
+can return to its normal autonomous/playful behavior.
+
 ### Motion endpoints
 
 - `GET /`
-- `GET /health`
-- `GET /status`
+- `GET /health` — service health only; does not open the serial device
+- `GET /status` — alias for `/health`; `connected=false` is expected between commands
 - `POST /wave`
 - `POST /nod`
 - `POST /look_left`
@@ -136,6 +141,8 @@ python cli.py serve --port /dev/ttyACM0 --host 127.0.0.1 --port-http 8765
 - `POST /display/image` — push a PNG (base64-encoded) to Eilik's screen
 - `POST /display/raw` — push a raw 1024-byte framebuffer to Eilik's screen
 - `POST /display/text` — render text (via Pillow) and push to Eilik's screen
+- `POST /display/idle` — restore the known calm idle-eye face
+- `POST /display/release` — diagnostic-only user-display release; on current firmware this may redraw the static wave/status icon
 
 ### Stage 2: actions / ambient / events
 
@@ -298,11 +305,13 @@ robot.disconnect()
 
 Two scripts make cron → Eilik integration trivial:
 
-### `scripts/ensure_eilik_service.sh` — keep the service alive
+### `scripts/ensure_eilik_service.sh` — keep the HTTP API available
 
 Pings `/health`. If unreachable, kills the leftover uvicorn process,
 auto-detects the Eilik USB port (`/dev/ttyACM1` or wherever `28e9:018a`
-shows up), and restarts the FastAPI service. Silent when healthy, logs
+shows up), and restarts the FastAPI service. This keeps the HTTP API
+available, but the API itself still uses short-lived serial sessions and does
+not hold Eilik in USB control mode. Silent when healthy, logs
 to `/tmp/eilik-service.watchdog.log` on restart attempts.
 
 Suggested cron: every 5 minutes (`*/5 * * * *`).

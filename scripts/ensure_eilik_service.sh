@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ensure_eilik_service.sh — idempotently start (or restart) the Eilik
-# FastAPI service in the background. Designed to be called from a cron
-# every few minutes to keep the service alive through USB unplug/replug,
-# stale port, or other transient failures.
+# FastAPI HTTP service in the background. The service itself uses on-demand
+# serial sessions, so keeping this API process alive does not keep Eilik's USB
+# control session or keepalive loop open.
 #
 # Usage:
 #   ensure_eilik_service.sh
@@ -49,12 +49,14 @@ if [ ! -e "$PORT" ]; then
   fi
 fi
 
-# 4. Start fresh
+# 4. Start fresh. Use setsid so the agent shell exiting does not take uvicorn
+# down with it; the HTTP API itself uses on-demand serial sessions.
 cd "$SDK_DIR"
-nohup "$VENV_PY" -u -m eilik serve --port "$PORT" --port-http "$HTTP_PORT" \
-  > /tmp/eilik-service.log 2>&1 &
-disown
-log "[ensure_eilik_service] started pid=$! port=$PORT http=$HTTP_PORT"
+setsid -f "$VENV_PY" -u -m eilik serve --port "$PORT" --port-http "$HTTP_PORT" \
+  > /tmp/eilik-service.log 2>&1 < /dev/null
+sleep 1
+new_pid="$(ss -tlnp 2>/dev/null | grep ":${HTTP_PORT}" | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2 || true)"
+log "[ensure_eilik_service] started pid=${new_pid:-unknown} port=$PORT http=$HTTP_PORT"
 
 # 5. Give it a moment, verify
 sleep 5
