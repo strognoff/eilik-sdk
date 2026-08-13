@@ -124,6 +124,16 @@ startup, and it does not keep a background keepalive loop running. Each command
 opens the serial session, runs the action, then disconnects so Eilik's firmware
 can return to its normal autonomous/playful behavior.
 
+Full API guide with copy/paste curl commands:
+
+- [docs/API.md](docs/API.md)
+- [docs/openapi.json](docs/openapi.json) generated from FastAPI's `/openapi.json`
+
+Live OpenAPI endpoints while the service is running:
+
+- `GET http://127.0.0.1:8765/openapi.json`
+- `GET http://127.0.0.1:8765/docs`
+
 ### Motion endpoints
 
 - `GET /`
@@ -240,12 +250,6 @@ curl -X POST http://127.0.0.1:8765/ambient/clock -H 'Content-Type: application/j
 curl -X POST http://127.0.0.1:8765/ambient/pr -H 'Content-Type: application/json' -d '{"pr_number": 42, "author": "quinn"}'
 curl -X POST http://127.0.0.1:8765/event/cron_done -H 'Content-Type: application/json' -d '{"name": "morning"}'
 curl -X POST http://127.0.0.1:8765/morning -H 'Content-Type: application/json' -d '{}'
-```
-
-Example:
-
-```bash
-curl -X POST http://127.0.0.1:8765/wave
 ```
 
 ## Python SDK
@@ -492,16 +496,16 @@ The known public protocol exposes horizontal head and torso axes plus arms. `nod
 
 ```mermaid
 flowchart TD
-    CLI[cli.py / eilik.cli] --> Controller[EilikController]
-    API[FastAPI service] --> Controller
-    Controller --> Protocol[protocol.py]
-    Controller --> Motions[motions.py]
-    Controller --> Logger[logger.py]
-    Controller --> Serial[/dev/ttyACM0 or discovered CDC ACM device]
-    Serial --> Eilik[Eilik robot]
-    Logger --> PacketLog[logs/eilik.log]
-    Controller --> Monitor[monitor mode]
-    Monitor --> MonitorLog[logs/eilik-monitor.log]
+    CLI["cli.py / eilik.cli"] --> Controller["EilikController"]
+    API["FastAPI service"] --> Controller
+    Controller --> Protocol["protocol.py"]
+    Controller --> Motions["motions.py"]
+    Controller --> Logger["logger.py"]
+    Controller --> Serial["/dev/ttyACM0 or discovered CDC ACM device"]
+    Serial --> Eilik["Eilik robot"]
+    Logger --> PacketLog["logs/eilik.log"]
+    Controller --> Monitor["monitor mode"]
+    Monitor --> MonitorLog["logs/eilik-monitor.log"]
 ```
 
 ## Tests
