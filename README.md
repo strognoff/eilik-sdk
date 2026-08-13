@@ -142,6 +142,14 @@ The same service also serves a local control webapp:
 - `GET http://127.0.0.1:8765/app`
 - `GET http://127.0.0.1:8765/app/game`
 
+Control room:
+
+![Eilik control room webapp](docs/assets/webapp-control-room.png)
+
+Kids game sequence builder:
+
+![Eilik kids game sequence builder](docs/assets/webapp-kids-builder.png)
+
 Setup and troubleshooting guide:
 
 - [docs/WEBAPP.md](docs/WEBAPP.md)
