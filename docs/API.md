@@ -30,6 +30,10 @@ A generated copy is checked in at [openapi.json](openapi.json).
 
 ## Webapp
 
+Full setup guide:
+
+- [WEBAPP.md](WEBAPP.md)
+
 Open the local control webapp:
 
 ```bash

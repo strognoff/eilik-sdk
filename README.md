@@ -127,6 +127,7 @@ can return to its normal autonomous/playful behavior.
 Full API guide with copy/paste curl commands:
 
 - [docs/API.md](docs/API.md)
+- [docs/WEBAPP.md](docs/WEBAPP.md)
 - [docs/openapi.json](docs/openapi.json) generated from FastAPI's `/openapi.json`
 
 Live OpenAPI endpoints while the service is running:
@@ -139,6 +140,10 @@ Live OpenAPI endpoints while the service is running:
 The same service also serves a local control webapp:
 
 - `GET http://127.0.0.1:8765/app`
+
+Setup and troubleshooting guide:
+
+- [docs/WEBAPP.md](docs/WEBAPP.md)
 
 It calls the API endpoints directly and includes:
 
