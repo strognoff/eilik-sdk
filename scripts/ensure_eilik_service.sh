@@ -20,12 +20,50 @@ HTTP_PORT="${HTTP_PORT:-8765}"
 LOG="${LOG:-/tmp/eilik-service.watchdog.log}"
 SDK_DIR="${SDK_DIR:-/home/cechinel/.openclaw/workspace/eilik-sdk}"
 VENV_PY="${SDK_DIR}/.venv/bin/python"
+STATE_FILE="${STATE_FILE:-/home/cechinel/.openclaw/workspace/state/eilik_watchdog.json}"
 
 mkdir -p "$(dirname "$LOG")"
+mkdir -p "$(dirname "$STATE_FILE")"
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$LOG"; }
+
+# Update state file in place. Args: action, port (may be empty).
+write_state() {
+  local action="$1"
+  local port="$2"
+  "$VENV_PY" - "$STATE_FILE" "$action" "$port" <<'PY' 2>/dev/null || true
+import json, os, sys
+from datetime import datetime, timezone
+
+path, action, port = sys.argv[1], sys.argv[2], sys.argv[3]
+now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+d = {}
+if os.path.exists(path):
+    try:
+        with open(path) as f:
+            d = json.load(f)
+    except Exception:
+        d = {}
+prev_skips = int(d.get("consecutive_skips", 0) or 0)
+if action in ("healthy_fastpath", "restarted"):
+    new_skips = 0
+elif action == "skipped_no_usb":
+    new_skips = prev_skips + 1
+else:
+    new_skips = prev_skips
+d.update({
+    "last_action": action,
+    "consecutive_skips": new_skips,
+    "last_action_at": now,
+    "port": port or d.get("port"),
+})
+with open(path, "w") as f:
+    json.dump(d, f, indent=2)
+PY
+}
 
 # 1. Health check first — fast path
 if curl -sS --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
+  write_state "healthy_fastpath" ""
   exit 0
 fi
 
@@ -45,6 +83,7 @@ if [ ! -e "$PORT" ]; then
     log "[ensure_eilik_service] auto-detected port=$PORT"
   else
     log "[ensure_eilik_service] no Eilik USB device present, skipping restart"
+    write_state "skipped_no_usb" ""
     exit 0
   fi
 fi
@@ -65,4 +104,5 @@ if curl -sS --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
 else
   log "[ensure_eilik_service] STILL UNHEALTHY after restart — manual intervention required"
 fi
+write_state "restarted" "$PORT"
 exit 0
