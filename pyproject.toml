@@ -32,3 +32,6 @@ eilik = ["web/*.html", "web/*.css", "web/*.js"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "expects_real_device_attempt: this test deliberately tries to open a real device path to prove the guard blocks it",
+]

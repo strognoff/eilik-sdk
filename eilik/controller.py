@@ -68,7 +68,7 @@ class EilikController:
         timeout: float = SERIAL_TIMEOUT_SECONDS,
         write_timeout: float = SERIAL_WRITE_TIMEOUT_SECONDS,
         close_timeout: float = SERIAL_CLOSE_TIMEOUT_SECONDS,
-        log_path: str | Path = DEFAULT_LOG_PATH,
+        log_path: str | Path | None = None,
         reconnect_attempts: int = 3,
         keepalive_interval: float = 2.0,
         enable_keepalive: bool = True,
@@ -81,7 +81,15 @@ class EilikController:
         self.reconnect_attempts = reconnect_attempts
         self.keepalive_interval = keepalive_interval
         self.enable_keepalive = enable_keepalive
-        self.logger = setup_logger(log_path)
+        # EILIK_LOG_PATH lets the test suite write to its own file. The
+        # device log is the only record of what actually moved the robot,
+        # so tests must never write into it.
+        resolved_log = (
+            log_path
+            or os.getenv("EILIK_LOG_PATH")
+            or DEFAULT_LOG_PATH
+        )
+        self.logger = setup_logger(resolved_log)
 
         self._serial = None
         self._session_token: bytes | None = None
