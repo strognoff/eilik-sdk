@@ -82,9 +82,18 @@ if [ ! -e "$PORT" ]; then
     PORT="$DETECTED"
     log "[ensure_eilik_service] auto-detected port=$PORT"
   else
-    log "[ensure_eilik_service] no Eilik USB device present, skipping restart"
+    # L#658c: no USB device is a legitimate, expected state (device unplugged,
+    # charging on the Windows host, etc.) - but it is NOT "healthy". Previously
+    # this path exited 0, so the cron watchdog reported HEALTHCHECK_OK while
+    # /health was unreachable and the API was down. The caller then had no way
+    # to tell "all good" from "service is down, we just can't restart it".
+    #
+    # Exit 2 = distinct, inspectable state. Not 1 (hard error, the cron would
+    # page repeatedly for a device that is simply unplugged) and not 0 (lies).
+    log "[ensure_eilik_service] no Eilik USB device present - service DOWN, cannot restart"
     write_state "skipped_no_usb" ""
-    exit 0
+    echo "EILIK_USB_ABSENT: no Eilik USB device on $PORT; HTTP service is not running and cannot be restarted until the device is reconnected." >&2
+    exit 2
   fi
 fi
 
@@ -101,8 +110,13 @@ log "[ensure_eilik_service] started pid=${new_pid:-unknown} port=$PORT http=$HTT
 sleep 5
 if curl -sS --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
   log "[ensure_eilik_service] healthy after restart"
-else
-  log "[ensure_eilik_service] STILL UNHEALTHY after restart — manual intervention required"
+  write_state "restarted" "$PORT"
+  exit 0
 fi
-write_state "restarted" "$PORT"
-exit 0
+# L#658c: same honesty fix on the post-restart verify. Previously this logged
+# "manual intervention required" and then fell through to exit 0, so a service
+# that was still dead after a restart attempt reported success.
+log "[ensure_eilik_service] STILL UNHEALTHY after restart — manual intervention required"
+write_state "restart_failed" "$PORT"
+echo "EILIK_UNHEALTHY: /health did not return 200 after a restart attempt; see $LOG and /tmp/eilik-service.log." >&2
+exit 2

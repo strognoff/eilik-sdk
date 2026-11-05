@@ -7,8 +7,12 @@ captures/*.pcapng
 captures/*.pcap
 captures/*.bin
 captures/*.log
+
+# Runtime logs (keep only the placeholder)
+logs/*
 !logs/.gitkeep
 # reversing: keep our RE reports, ignore raw binaries
+reversing/_energizelab_extract/
 reversing/.venv/
 reversing/EnergizeApp/
 reversing/EnergizeLab.exe_extracted/
@@ -19,5 +23,6 @@ reversing/_reports/hermes.focused_context.txt
 reversing/_reports/dex.strings.txt
 reversing/_reports/arm64.strings.txt
 reversing/_reports/hermes.strings.txt
+reversing/_reports/*.err
 reversing/*.apk
 reversing/*.apk:Zone.Identifier
