@@ -323,6 +323,31 @@ def diagnostic_snapshot(include_display: bool = False) -> dict[str, object]:
     return controller.diagnostic_snapshot(include_display=include_display)
 
 
+@app.post("/diagnostic/ping")
+def diagnostic_ping() -> dict[str, object]:
+    """Round-trip the USB endpoint WITHOUT moving the robot.
+
+    The recovery watchdog needs to know whether the bulk OUT endpoint is
+    actually usable. /health cannot tell: it answers 200 whenever the
+    HTTP service is alive, even when every device write is stalled.
+
+    This endpoint opens the port and reads the servo angles back, so a 2xx
+    proves the device really answered. It deliberately does NOT run any
+    motion, face or display action -- unlike /event/cron_done, which makes
+    the robot nod and hold a face. A health check must not have visible
+    side effects.
+    """
+    return controller.run(
+        "diagnostic_ping",
+        lambda robot: {
+            "status": "ok",
+            "port": robot.port,
+            "protocol": robot.protocol_variant,
+            "servo_angles": robot.read_servo_angles(),
+        },
+    )
+
+
 @app.post("/diagnostic/motion")
 def diagnostic_motion(payload: dict | None = None) -> dict[str, object]:
     """Move one motor, verify readback changed, then restore rest."""
