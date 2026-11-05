@@ -6,6 +6,15 @@ from dataclasses import dataclass
 
 BAUD_RATE = 125000
 SERIAL_TIMEOUT_SECONDS = 1.0
+# Bound for a single USB CDC write. pyserial's write() performs an UNBOUNDED
+# select() when write_timeout is None, so a stalled bulk-OUT endpoint blocks
+# the calling thread forever. Observed 2026-11-05: the bridge leaked one fd
+# and one stuck thread per POST, and the HTTP request never returned.
+SERIAL_WRITE_TIMEOUT_SECONDS = 2.0
+# Bound for tearing down the serial fd. On a stalled CDC endpoint the
+# TIOCMGET/TIOCMSET ioctls and os.close() can block indefinitely in the
+# kernel, so the teardown runs on a daemon thread with this join budget.
+SERIAL_CLOSE_TIMEOUT_SECONDS = 1.0
 
 HEADER = bytes.fromhex("aa aa aa")
 HANDSHAKE_SIGNATURE = bytes.fromhex("aa aa aa 0a 00 61")

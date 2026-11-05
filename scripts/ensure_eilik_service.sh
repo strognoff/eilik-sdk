@@ -69,11 +69,41 @@ fi
 
 log "[ensure_eilik_service] unhealthy, restarting"
 
-# 2. Kill any leftover eilik uvicorn process (by port, not pkill)
-for pid in $(ss -tlnp 2>/dev/null | grep ":${HTTP_PORT}" | grep -oE 'pid=[0-9]+' | head -3 | cut -d= -f2); do
-  kill "$pid" 2>/dev/null && log "[ensure_eilik_service] killed pid=$pid"
+
+# 2. Kill any leftover eilik uvicorn process.
+#
+# TWO sweeps are required (L#1020). Killing only by "pid owning port 8765"
+# misses a stale bridge that has ALREADY lost the port to its replacement.
+# On 2026-11-05 the old process (pid 26960, running since Oct 30, 82% CPU)
+# still held /dev/ttyACM0 open while the NEW process owned 8765 -- so the
+# port-owner sweep found only the new pid and the stale one survived SIGTERM
+# and needed SIGKILL. It had leaked one /dev/ttyACM0 fd and one spinning
+# thread per blocked POST.
+#
+# Sweep A: the pid that owns the HTTP port.
+# Sweep B: ANY process matching the bridge command line (the stale one).
+bridge_pids() {
+    {
+        ss -tlnp 2>/dev/null | grep ":${HTTP_PORT}" | grep -oE 'pid=[0-9]+' | cut -d= -f2
+        pgrep -f 'eilik serve' 2>/dev/null
+    } | sort -u
+}
+
+for pid in $(bridge_pids); do
+    [ "$pid" = "$$" ] && continue
+    kill "$pid" 2>/dev/null && log "[ensure_eilik_service] killed pid=$pid"
 done
 sleep 2
+
+# Anything still alive after SIGTERM is wedged (most likely blocked in an
+# unbounded serial write). Escalate to SIGKILL.
+for pid in $(bridge_pids); do
+    [ "$pid" = "$$" ] && continue
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null && log "[ensure_eilik_service] SIGKILL pid=$pid (survived SIGTERM)"
+    fi
+done
+sleep 1
 
 # 3. Auto-detect port if ACM1 missing
 if [ ! -e "$PORT" ]; then

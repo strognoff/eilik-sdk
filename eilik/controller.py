@@ -10,6 +10,11 @@ import time
 from pathlib import Path
 from typing import Iterable, List, Optional
 
+try:
+    import serial
+except ImportError:  # pragma: no cover - pyserial is a hard dependency
+    serial = None  # type: ignore[assignment]
+
 from .logger import DEFAULT_LOG_PATH, hex_bytes, setup_logger
 from .motions import MOTIONS
 from .pack import (
@@ -28,6 +33,8 @@ from .protocol import (
     OFFICIAL_STATUS_REQUEST,
     REST_POSITION,
     SERIAL_TIMEOUT_SECONDS,
+    SERIAL_WRITE_TIMEOUT_SECONDS,
+    SERIAL_CLOSE_TIMEOUT_SECONDS,
     ServoCommand,
     extract_session_token,
     has_command_reply,
@@ -59,6 +66,8 @@ class EilikController:
         port: str | None = None,
         baud_rate: int = BAUD_RATE,
         timeout: float = SERIAL_TIMEOUT_SECONDS,
+        write_timeout: float = SERIAL_WRITE_TIMEOUT_SECONDS,
+        close_timeout: float = SERIAL_CLOSE_TIMEOUT_SECONDS,
         log_path: str | Path = DEFAULT_LOG_PATH,
         reconnect_attempts: int = 3,
         keepalive_interval: float = 2.0,
@@ -67,6 +76,8 @@ class EilikController:
         self.port = port
         self.baud_rate = baud_rate
         self.timeout = timeout
+        self.write_timeout = write_timeout
+        self.close_timeout = close_timeout
         self.reconnect_attempts = reconnect_attempts
         self.keepalive_interval = keepalive_interval
         self.enable_keepalive = enable_keepalive
@@ -141,18 +152,31 @@ class EilikController:
             self.port = port
             self.logger.info("CONNECT port=%s baud=%s timeout=%s", port, self.baud_rate, self.timeout)
 
-            try:
-                import serial
-            except ImportError as exc:
-                raise EilikConnectionError("pyserial is required; install with `pip install pyserial`") from exc
+            if serial is None:
+                raise EilikConnectionError("pyserial is required; install with `pip install pyserial`")
 
+            ser = None
             try:
-                ser = serial.Serial(port, self.baud_rate, timeout=self.timeout)
+                ser = serial.Serial(
+                    port,
+                    self.baud_rate,
+                    timeout=self.timeout,
+                    write_timeout=self.write_timeout,
+                )
                 ser.rts = False
                 ser.dtr = True
                 time.sleep(1.0)
                 ser.reset_input_buffer()
             except Exception as exc:
+                # A write_timeout (or any other open-time failure) must not
+                # leave a half-open fd behind. The service opens a fresh
+                # controller per request, so a leaked fd accumulates one per
+                # attempt until the process runs out of descriptors.
+                try:
+                    if ser is not None:
+                        ser.close()
+                except Exception:
+                    pass
                 raise EilikConnectionError(f"Could not open Eilik serial port {port}: {exc}") from exc
 
             self._serial = ser
@@ -175,14 +199,41 @@ class EilikController:
             self._keepalive_thread = None
             self._keepalive_stop.clear()
 
-            if self._serial is not None:
-                try:
-                    self._serial.close()
-                finally:
-                    self.logger.info("DISCONNECT")
-            self._serial = None
+            self._close_serial()
             self._session_token = None
             self._protocol_variant = None
+
+    def _close_serial(self) -> None:
+        """Close the serial fd without letting a stalled endpoint block us.
+
+        On a stalled CDC endpoint both the TIOCMGET/TIOCMSET ioctls and
+        os.close() can block indefinitely in the kernel (measured 2026-11-05:
+        close() did not return in 15 s). The teardown therefore runs on a
+        daemon thread with a bounded join: the caller returns promptly
+        instead of hanging the request, and the kernel thread finishes (or
+        dies) on its own.
+        """
+        ser = self._serial
+        if ser is None:
+            return
+        self._serial = None
+
+        def _close() -> None:
+            try:
+                ser.close()
+            except Exception:
+                pass
+
+        worker = threading.Thread(target=_close, daemon=True, name="eilik-serial-close")
+        worker.start()
+        worker.join(timeout=self.close_timeout)
+        if worker.is_alive():
+            self.logger.warning(
+                "CLOSE_TIMEOUT serial close did not complete within %.1fs",
+                self.close_timeout,
+            )
+        else:
+            self.logger.info("DISCONNECT")
 
     def move_motor(self, motor_id: int, position: int) -> None:
         """Move a single servo using the canonical pack-format `cmd=0xA2`.
@@ -1009,7 +1060,13 @@ class EilikController:
     def _write_raw(self, data: bytes, label: str = "TX") -> None:
         assert self._serial is not None
         self.logger.info("%s %s", label, hex_bytes(data))
-        self._serial.write(data)
+        try:
+            self._serial.write(data)
+        except serial.SerialTimeoutException as exc:
+            raise EilikConnectionError(
+                f"Serial write timed out after {self.write_timeout}s; "
+                "the USB endpoint is not accepting data"
+            ) from exc
 
     def _read_available(self) -> bytes:
         assert self._serial is not None

@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .controller import EilikController
+from .controller import EilikConnectionError
 from .logger import setup_logger
 from .motions import MOTIONS
 from .protocol import (
@@ -97,6 +98,12 @@ class OnDemandController:
                 round((time.monotonic() - started) * 1000),
                 exc,
             )
+            if isinstance(exc, EilikConnectionError):
+                # The USB endpoint is unusable. Report it as 503 with a
+                # readable message instead of a 500 stack: the caller is a
+                # fire-and-forget cron callback that only needs to know the
+                # Eilik could not be reached, quickly.
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
             raise
         finally:
             robot.disconnect()
