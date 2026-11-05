@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
 import time
 import uuid
 from collections import deque
@@ -31,6 +32,11 @@ from .protocol import (
 
 SERVICE_PORT = os.getenv("EILIK_PORT") or None
 LOG_PATH = os.getenv("EILIK_LOG_PATH", "logs/eilik.log")
+# Hard ceiling for one API request. The cron callbacks use curl --max-time
+# 30, so a request that runs longer is abandoned by the caller anyway --
+# and the abandoned request keeps a thread and an fd alive. Fail fast with a
+# 503 instead, so the failure is visible and the resources are released.
+REQUEST_TIMEOUT_SECONDS = float(os.getenv("EILIK_REQUEST_TIMEOUT", "25"))
 SERVICE_LOGGER = setup_logger(LOG_PATH)
 app = FastAPI(title="Eilik Controller Service", version="0.1.0")
 T = TypeVar("T")
@@ -79,17 +85,51 @@ class OnDemandController:
             port=SERVICE_PORT,
             log_path=LOG_PATH,
             enable_keepalive=False,
+            # The service opens a FRESH connection per request, so retrying
+            # inside one request only multiplies the time it takes to fail.
+            # A stalled endpoint costs ~2 s per write attempt plus ~30 s for
+            # the kernel close, so three retries pushed a single request past
+            # 90 s -- far beyond the 30 s curl timeout the cron callbacks use.
+            reconnect_attempts=0,
         )
+        result: dict[str, object] = {}
+        error: list[BaseException] = []
+
+        def _work() -> None:
+            try:
+                robot.connect()
+                result["value"] = fn(robot)
+            except BaseException as exc:  # noqa: BLE001 - re-raised below
+                error.append(exc)
+
         try:
-            robot.connect()
-            result = fn(robot)
+            worker = threading.Thread(target=_work, daemon=True, name=f"eilik-{operation}")
+            worker.start()
+            worker.join(timeout=REQUEST_TIMEOUT_SECONDS)
+            if worker.is_alive():
+                SERVICE_LOGGER.error(
+                    "API_TIMEOUT id=%s operation=%s timeout_s=%s",
+                    request_id,
+                    operation,
+                    REQUEST_TIMEOUT_SECONDS,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        f"Eilik operation {operation} exceeded "
+                        f"{REQUEST_TIMEOUT_SECONDS:.0f}s (the USB endpoint is stuck)"
+                    ),
+                )
+            if error:
+                raise error[0]
+            value = result["value"]
             SERVICE_LOGGER.info(
                 "API_END id=%s operation=%s status=ok duration_ms=%s",
                 request_id,
                 operation,
                 round((time.monotonic() - started) * 1000),
             )
-            return result
+            return value
         except Exception as exc:
             SERVICE_LOGGER.exception(
                 "API_END id=%s operation=%s status=error duration_ms=%s error=%s",

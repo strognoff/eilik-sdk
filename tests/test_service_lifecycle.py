@@ -10,7 +10,7 @@ from eilik import service
 class FakeEilikController:
     instances: list["FakeEilikController"] = []
 
-    def __init__(self, port=None, log_path=None, enable_keepalive=True):
+    def __init__(self, port=None, log_path=None, enable_keepalive=True, reconnect_attempts=0):
         self.port = port
         self.log_path = log_path
         self.enable_keepalive = enable_keepalive
@@ -176,3 +176,25 @@ def test_sequence_routine_runs_ordered_steps_in_one_session(monkeypatch) -> None
         "move:2:1500",
         "disconnect",
     ]
+
+
+def test_request_deadline_returns_503_instead_of_hanging(monkeypatch):
+    # A stuck USB endpoint must fail the request, not hang it (L#1020).
+    # The cron callbacks use curl --max-time 30; a request that runs longer
+    # is abandoned by the caller anyway and keeps a thread and fd alive.
+    import time
+
+    monkeypatch.setattr(service, "REQUEST_TIMEOUT_SECONDS", 0.5)
+
+    class SlowController(FakeEilikController):
+        def connect(self) -> None:
+            self.events.append("connect")
+            time.sleep(30)
+
+    monkeypatch.setattr(service, "EilikController", SlowController)
+
+    with pytest.raises(Exception) as excinfo:
+        service.controller.run("slow_op", lambda robot: "never")
+
+    assert "exceeded" in str(excinfo.value)
+    assert getattr(excinfo.value, "status_code", None) == 503

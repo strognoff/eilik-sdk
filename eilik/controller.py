@@ -163,10 +163,20 @@ class EilikController:
                     timeout=self.timeout,
                     write_timeout=self.write_timeout,
                 )
-                ser.rts = False
-                ser.dtr = True
+                # The RTS/DTR ioctls can TIME OUT on a wedged CDC endpoint
+                # (OSError 62 "Timer expired"). They are a courtesy nudge,
+                # not a requirement -- a timeout here must not fail the whole
+                # connection, so log it and carry on.
+                for attr in ("rts", "dtr"):
+                    try:
+                        setattr(ser, attr, False if attr == "rts" else True)
+                    except Exception as exc:
+                        self.logger.warning("MODEM_SET_FAILED %s: %s", attr, exc)
                 time.sleep(1.0)
-                ser.reset_input_buffer()
+                try:
+                    ser.reset_input_buffer()
+                except Exception as exc:
+                    self.logger.warning("RESET_INPUT_FAILED: %s", exc)
             except Exception as exc:
                 # A write_timeout (or any other open-time failure) must not
                 # leave a half-open fd behind. The service opens a fresh
