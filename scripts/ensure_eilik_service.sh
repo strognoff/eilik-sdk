@@ -85,7 +85,28 @@ log "[ensure_eilik_service] unhealthy, restarting"
 bridge_pids() {
     {
         ss -tlnp 2>/dev/null | grep ":${HTTP_PORT}" | grep -oE 'pid=[0-9]+' | cut -d= -f2
-        pgrep -f 'eilik serve' 2>/dev/null
+        # Match ONLY the real bridge process, by its argv.
+        #
+        # A loose pattern such as 'eilik serve' matches any shell whose
+        # command line merely CONTAINS those words - including an
+        # assistant shell running a command that mentions them. This
+        # sweep then SIGTERMs and SIGKILLs it. Measured 2026-11-05:
+        # restarting the bridge killed the reporter's own shell, which
+        # looked like the restart itself had failed.
+        #
+        # A regex is not enough either: a shell whose command line quotes
+        # the pattern text matches its own pattern. So check argv
+        # directly - argv[0] must be the venv python and the arguments
+        # must be exactly '-m eilik serve'.
+        for d in /proc/[0-9]*; do
+            pid=${d#/proc/}
+            [ -r "$d/cmdline" ] || continue
+            argv0=$(tr '\0' '\n' < "$d/cmdline" 2>/dev/null | sed -n '1p')
+            [ "$argv0" = "$VENV_PY" ] || continue
+            if tr '\0' '\n' < "$d/cmdline" 2>/dev/null | sed -n '2,5p' | tr '\n' ' ' | grep -q -- '-m eilik serve'; then
+                echo "$pid"
+            fi
+        done
     } | sort -u
 }
 

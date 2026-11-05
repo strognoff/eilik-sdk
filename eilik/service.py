@@ -37,6 +37,19 @@ LOG_PATH = os.getenv("EILIK_LOG_PATH", "logs/eilik.log")
 # and the abandoned request keeps a thread and an fd alive. Fail fast with a
 # 503 instead, so the failure is visible and the resources are released.
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("EILIK_REQUEST_TIMEOUT", "25"))
+# The Eilik is ONE USB CDC endpoint. Two concurrent requests would each
+# open /dev/ttyACM0 and race the handshake, and the losers fail with
+# "No handshake reply from Eilik" even though the device is perfectly
+# healthy. Measured 2026-11-05: 5 concurrent pings -> 3 ok, 2 handshake
+# errors. Serialise device access instead.
+#
+# The wait is bounded: if the holder is stuck on a wedged endpoint, the
+# waiter gives up and reports the device as busy rather than queueing
+# forever. 20 s sits inside REQUEST_TIMEOUT_SECONDS (25 s) and inside
+# the 30 s curl timeout the cron callbacks use, so a normal callback
+# (~3.7 s) never trips it.
+SERIAL_LOCK = threading.Lock()
+SERIAL_ACQUIRE_TIMEOUT_SECONDS = float(os.getenv("EILIK_SERIAL_ACQUIRE_TIMEOUT", "20"))
 SERVICE_LOGGER = setup_logger(LOG_PATH)
 app = FastAPI(title="Eilik Controller Service", version="0.1.0")
 T = TypeVar("T")
@@ -96,15 +109,40 @@ class OnDemandController:
         error: list[BaseException] = []
 
         def _work() -> None:
+            # The device is a single resource: only one request may hold
+            # it at a time.
+            acquired = SERIAL_LOCK.acquire(timeout=SERIAL_ACQUIRE_TIMEOUT_SECONDS)
             try:
-                robot.connect()
-                result["value"] = fn(robot)
+                if not acquired:
+                    error.append(
+                        EilikConnectionError(
+                            "the Eilik device is busy: another request held it "
+                            f"for more than {SERIAL_ACQUIRE_TIMEOUT_SECONDS:.0f}s"
+                        )
+                    )
+                    return
+                try:
+                    robot.connect()
+                    result["value"] = fn(robot)
+                except BaseException as exc:  # noqa: BLE001 - re-raised below
+                    error.append(exc)
+                finally:
+                    # The worker owns the device. Disconnecting from the
+                    # request thread would close the serial port while the
+                    # worker is still writing to it.
+                    try:
+                        robot.disconnect()
+                    finally:
+                        SERIAL_LOCK.release()
             except BaseException as exc:  # noqa: BLE001 - re-raised below
                 error.append(exc)
 
+        worker: threading.Thread | None = None
+        worker_started = False
         try:
             worker = threading.Thread(target=_work, daemon=True, name=f"eilik-{operation}")
             worker.start()
+            worker_started = True
             worker.join(timeout=REQUEST_TIMEOUT_SECONDS)
             if worker.is_alive():
                 SERVICE_LOGGER.error(
@@ -146,7 +184,14 @@ class OnDemandController:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
             raise
         finally:
-            robot.disconnect()
+            # The worker owns the device for its whole life: it connects,
+            # runs the command and disconnects. The request thread must
+            # NOT close the port while the worker is still writing to it
+            # (that was the race on the timeout path), and it must not
+            # close it a second time after the worker already did.
+            # The only case left is a worker that never started.
+            if not worker_started:
+                robot.disconnect()
 
 
 controller = OnDemandController()
