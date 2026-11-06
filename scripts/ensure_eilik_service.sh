@@ -22,6 +22,20 @@ SDK_DIR="${SDK_DIR:-/home/cechinel/.openclaw/workspace/eilik-sdk}"
 VENV_PY="${SDK_DIR}/.venv/bin/python"
 STATE_FILE="${STATE_FILE:-/home/cechinel/.openclaw/workspace/state/eilik_watchdog.json}"
 
+# ---- Exclusive lock (L#1041) ----
+# Two invocations of this script raced on 2026-11-06: a manual run and the
+# */5 cron both found the bridge unhealthy, both swept the port, and the
+# second uvicorn died with "Errno 98" while the sweep killed the first -
+# leaving NO bridge at all. Serialize the whole run so only one instance
+# ever sweeps and starts. The lock is taken BEFORE the health check, so the
+# loser waits and then takes the healthy fast path.
+LOCK_FILE="${LOCK_FILE:-/tmp/eilik-service.lock}"
+exec 9>"$LOCK_FILE"
+if ! flock -w 180 9; then
+  echo "EILIK_LOCK_TIMEOUT: another instance holds the bridge lock; skipping." >&2
+  exit 0
+fi
+
 mkdir -p "$(dirname "$LOG")"
 mkdir -p "$(dirname "$STATE_FILE")"
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$LOG"; }
